@@ -8,7 +8,7 @@ const Toolbar: React.FC = () => {
   const tools = [
     { id: 'select', name: 'Select', icon: '↖️', description: 'Select and move objects' },
     { id: 'rectangle', name: 'Rectangle', icon: '⬛', description: 'Create rectangles' },
-    { id: 'circle', name: 'Circle', icon: '⭕', description: 'Create circles (coming soon)' },
+    { id: 'circle', name: 'Circle', icon: '⭕', description: 'Create circles' },
     { id: 'text', name: 'Text', icon: '📝', description: 'Create text (coming soon)' },
   ] as const;
 
@@ -28,18 +28,18 @@ const Toolbar: React.FC = () => {
                   ? 'bg-blue-100 text-blue-700 border-2 border-blue-300'
                   : 'text-gray-600 hover:bg-gray-100 border-2 border-transparent'
                 }
-                ${toolOption.id !== 'select' && toolOption.id !== 'rectangle' 
+                ${toolOption.id !== 'select' && toolOption.id !== 'rectangle' && toolOption.id !== 'circle'
                   ? 'opacity-50 cursor-not-allowed' 
                   : 'hover:scale-105'
                 }
               `}
               onClick={() => {
-                if (toolOption.id === 'select' || toolOption.id === 'rectangle') {
+                if (toolOption.id === 'select' || toolOption.id === 'rectangle' || toolOption.id === 'circle') {
                   setTool(toolOption.id as any);
                 }
               }}
               title={toolOption.description}
-              disabled={toolOption.id !== 'select' && toolOption.id !== 'rectangle'}
+              disabled={toolOption.id !== 'select' && toolOption.id !== 'rectangle' && toolOption.id !== 'circle'}
             >
               <span className="text-lg">{toolOption.icon}</span>
               <span>{toolOption.name}</span>
@@ -72,7 +72,9 @@ const Toolbar: React.FC = () => {
       <div className="mt-2 text-center">
         <div className="inline-block bg-gray-800 text-white text-xs px-3 py-1 rounded-full">
           {tool === 'rectangle' 
-            ? 'Click on canvas to create rectangles'
+            ? 'Click and drag on canvas to create rectangles'
+            : tool === 'circle'
+            ? 'Click and drag on canvas to create circles'
             : tool === 'select'
             ? 'Click and drag objects to move them'
             : 'Select a tool to get started'

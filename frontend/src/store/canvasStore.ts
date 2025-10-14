@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { CanvasObject, RectangleObject, CanvasState } from '../types/canvas';
+import type { CanvasObject, RectangleObject, CircleObject, CanvasState } from '../types/canvas';
 import { COLOR_PALETTE } from '../types/canvas';
 
 interface CanvasStore extends CanvasState {
@@ -12,8 +12,9 @@ interface CanvasStore extends CanvasState {
     setTool: (tool: CanvasState['tool']) => void;
     setActiveColor: (color: string) => void;
 
-    // Rectangle-specific actions
+    // Shape-specific actions
     createRectangle: (x: number, y: number, width?: number, height?: number) => RectangleObject;
+    createCircle: (x: number, y: number, radius?: number) => CircleObject;
 
     // Utility functions
     getObjectById: (id: string) => CanvasObject | undefined;
@@ -30,7 +31,7 @@ export const useCanvasStore = create<CanvasStore>()(
             // Initial state
             objects: [],
             selectedObjectId: null,
-            tool: 'rectangle',
+            tool: 'select',
             activeColor: COLOR_PALETTE[0], // Default to blue
 
             // Actions
@@ -78,6 +79,22 @@ export const useCanvasStore = create<CanvasStore>()(
 
                 get().addObject(rectangle);
                 return rectangle;
+            },
+
+            createCircle: (x, y, radius = 50) => {
+                const circle: CircleObject = {
+                    id: generateId(),
+                    type: 'circle',
+                    x,
+                    y,
+                    radius,
+                    color: get().activeColor,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                };
+
+                get().addObject(circle);
+                return circle;
             },
 
             getObjectById: (id) => {

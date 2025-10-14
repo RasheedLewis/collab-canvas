@@ -1,11 +1,12 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Stage, Layer } from 'react-konva';
+import { Stage, Layer, Rect, Circle } from 'react-konva';
 import Konva from 'konva';
 import GridBackground from './GridBackground';
 import CanvasRectangle from './CanvasRectangle';
+import CanvasCircle from './CanvasCircle';
 import Toolbar from './Toolbar';
 import { useCanvasStore } from '../../store/canvasStore';
-import type { RectangleObject } from '../../types/canvas';
+import type { RectangleObject, CircleObject } from '../../types/canvas';
 
 interface CanvasProps {
   width?: number;
@@ -20,7 +21,19 @@ const Canvas: React.FC<CanvasProps> = ({
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const [stageScale, setStageScale] = useState(1);
   
-  const { objects, tool, createRectangle, selectObject } = useCanvasStore();
+  // Shape creation state
+  const [isCreating, setIsCreating] = useState(false);
+  const [creationStart, setCreationStart] = useState<{ x: number; y: number } | null>(null);
+  const [previewShape, setPreviewShape] = useState<{
+    type: 'rectangle' | 'circle';
+    x: number;
+    y: number;
+    width?: number;
+    height?: number;
+    radius?: number;
+  } | null>(null);
+  
+  const { objects, tool, createRectangle, createCircle, selectObject } = useCanvasStore();
 
   // Handle window resize
   useEffect(() => {
@@ -75,33 +88,122 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Handle drag events for panning
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
-    setStagePos({
-      x: e.target.x(),
-      y: e.target.y(),
-    });
+    // Only update stage position if we're actually dragging the stage itself
+    if (e.target === stageRef.current) {
+      setStagePos({
+        x: e.target.x(),
+        y: e.target.y(),
+      });
+    }
   };
 
-  // Handle stage click for creating rectangles
-  const handleStageClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    // Only create rectangles if we clicked on the stage itself (not on an object)
+  // Convert screen coordinates to canvas coordinates
+  const getCanvasCoordinates = (screenX: number, screenY: number) => {
+    return {
+      x: (screenX - stagePos.x) / stageScale,
+      y: (screenY - stagePos.y) / stageScale,
+    };
+  };
+
+  // Handle mouse down - start shape creation
+  const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    // Only start creation if we clicked on the stage itself (not on an object)
     if (e.target === stageRef.current) {
       // Deselect any selected objects when clicking on empty canvas
       selectObject(null);
       
-      if (tool === 'rectangle') {
+      if (tool === 'rectangle' || tool === 'circle') {
         const stage = stageRef.current;
         if (stage) {
           const pointer = stage.getPointerPosition();
           if (pointer) {
-            // Convert screen coordinates to canvas coordinates
-            const canvasX = (pointer.x - stagePos.x) / stageScale;
-            const canvasY = (pointer.y - stagePos.y) / stageScale;
+            const canvasCoords = getCanvasCoordinates(pointer.x, pointer.y);
+            setIsCreating(true);
+            setCreationStart(canvasCoords);
             
-            createRectangle(canvasX, canvasY);
+            // Initialize preview shape
+            if (tool === 'rectangle') {
+              setPreviewShape({
+                type: 'rectangle',
+                x: canvasCoords.x,
+                y: canvasCoords.y,
+                width: 1,
+                height: 1,
+              });
+            } else if (tool === 'circle') {
+              setPreviewShape({
+                type: 'circle',
+                x: canvasCoords.x,
+                y: canvasCoords.y,
+                radius: 1,
+              });
+            }
           }
         }
       }
     }
+  };
+
+  // Handle mouse move - update preview shape
+  const handleMouseMove = () => {
+    if (!isCreating || !creationStart) return;
+
+    const stage = stageRef.current;
+    if (stage) {
+      const pointer = stage.getPointerPosition();
+      if (pointer) {
+        const canvasCoords = getCanvasCoordinates(pointer.x, pointer.y);
+        
+        if (tool === 'rectangle') {
+          const width = Math.abs(canvasCoords.x - creationStart.x);
+          const height = Math.abs(canvasCoords.y - creationStart.y);
+          const x = Math.min(creationStart.x, canvasCoords.x);
+          const y = Math.min(creationStart.y, canvasCoords.y);
+          
+          setPreviewShape({
+            type: 'rectangle',
+            x,
+            y,
+            width: Math.max(width, 5), // Minimum size
+            height: Math.max(height, 5),
+          });
+        } else if (tool === 'circle') {
+          const deltaX = canvasCoords.x - creationStart.x;
+          const deltaY = canvasCoords.y - creationStart.y;
+          const radius = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+          
+          setPreviewShape({
+            type: 'circle',
+            x: creationStart.x,
+            y: creationStart.y,
+            radius: Math.max(radius, 5), // Minimum size
+          });
+        }
+      }
+    }
+  };
+
+  // Handle mouse up - create final shape
+  const handleMouseUp = () => {
+    if (!isCreating || !previewShape) return;
+
+    // Create the actual shape with the preview dimensions
+    if (previewShape.type === 'rectangle' && previewShape.width && previewShape.height) {
+      // Only create if the shape has meaningful size
+      if (previewShape.width > 5 && previewShape.height > 5) {
+        createRectangle(previewShape.x, previewShape.y, previewShape.width, previewShape.height);
+      }
+    } else if (previewShape.type === 'circle' && previewShape.radius) {
+      // Only create if the shape has meaningful size
+      if (previewShape.radius > 5) {
+        createCircle(previewShape.x, previewShape.y, previewShape.radius);
+      }
+    }
+
+    // Reset creation state
+    setIsCreating(false);
+    setCreationStart(null);
+    setPreviewShape(null);
   };
 
   return (
@@ -119,16 +221,17 @@ const Canvas: React.FC<CanvasProps> = ({
         width={width}
         height={height}
         onWheel={handleWheel}
-        draggable={tool === 'select'}
+        draggable={tool === 'select' && !isCreating}
         onDragEnd={handleDragEnd}
-        onClick={handleStageClick}
-        onTap={handleStageClick}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         x={stagePos.x}
         y={stagePos.y}
         scaleX={stageScale}
         scaleY={stageScale}
         style={{ 
-          cursor: tool === 'rectangle' ? 'crosshair' : tool === 'select' ? 'grab' : 'default'
+          cursor: (tool === 'rectangle' || tool === 'circle') ? 'crosshair' : tool === 'select' ? 'grab' : 'default'
         }}
       >
         <Layer>
@@ -151,10 +254,48 @@ const Canvas: React.FC<CanvasProps> = ({
                   rectangle={obj as RectangleObject} 
                 />
               );
+            } else if (obj.type === 'circle') {
+              return (
+                <CanvasCircle 
+                  key={obj.id} 
+                  circle={obj as CircleObject} 
+                />
+              );
             }
-            // Add other object types here later (circle, text)
+            // Add text objects here later
             return null;
           })}
+          
+          {/* Preview shape while creating */}
+          {previewShape && (
+            <>
+              {previewShape.type === 'rectangle' && (
+                <Rect
+                  x={previewShape.x}
+                  y={previewShape.y}
+                  width={previewShape.width}
+                  height={previewShape.height}
+                  fill="transparent"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dash={[5, 5]}
+                  listening={false}
+                />
+              )}
+              {previewShape.type === 'circle' && (
+                <Circle
+                  x={previewShape.x}
+                  y={previewShape.y}
+                  radius={previewShape.radius}
+                  fill="transparent"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dash={[5, 5]}
+                  listening={false}
+                />
+              )}
+            </>
+          )}
         </Layer>
       </Stage>
       
@@ -167,6 +308,7 @@ const Canvas: React.FC<CanvasProps> = ({
         <div>Position: ({stagePos.x.toFixed(0)}, {stagePos.y.toFixed(0)})</div>
         <div>Objects: {objects.length}</div>
         <div>Tool: {tool}</div>
+        {isCreating && <div className="text-blue-600">Creating...</div>}
       </div>
       
       {/* Controls info */}
@@ -174,8 +316,8 @@ const Canvas: React.FC<CanvasProps> = ({
         <div className="font-semibold mb-2">Controls:</div>
         <div>• Mouse wheel to zoom (0.1x - 5x)</div>
         <div>• {tool === 'select' ? 'Drag canvas to pan' : 'Select tool to drag canvas'}</div>
-        <div>• Click rectangles to select</div>
-        <div>• Drag rectangles to move</div>
+        <div>• {(tool === 'rectangle' || tool === 'circle') ? 'Drag to create shapes' : 'Click objects to select'}</div>
+        <div>• Drag objects to move</div>
       </div>
     </div>
   );
