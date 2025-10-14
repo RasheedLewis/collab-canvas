@@ -1,0 +1,111 @@
+graph TB
+    %% Frontend Application
+    subgraph Frontend["Frontend React/TypeScript Application"]
+        UI["UI Components<br/>(Canvas, Toolbar, CursorOverlay)"]
+        State["State Management<br/>(useCanvas, useAuth)"]
+        Hooks["Custom Hooks<br/>(useWebSocket, useCanvas)"]
+        Utils["Canvas Utilities<br/>(canvasUtils, shapeHelpers)"]
+        
+        UI --> State
+        State --> Hooks
+        Hooks --> Utils
+    end
+
+    %% Backend Services
+    subgraph Backend["Backend Node.js/TypeScript Server"]
+        WS["WebSocket Server<br/>(connectionHandler)"]
+        Handlers["Message Handlers<br/>(cursorHandler, objectHandler)"]
+        Auth["Authentication<br/>(authHandler)"]
+        Models["Data Models<br/>(User, CanvasObject)"]
+        
+        WS --> Handlers
+        Handlers --> Models
+        Auth --> Models
+    end
+
+    %% External Services
+    subgraph External["External Services"]
+        Firebase["Firebase Firestore<br/>(Real-time Database)"]
+        FirebaseAuth["Firebase Auth<br/>(User Authentication)"]
+        OpenAI["OpenAI API<br/>(Future AI Features)"]
+    end
+
+    %% Deployment & Infrastructure
+    subgraph Deployment["Deployment & Infrastructure"]
+        FrontendDeploy["Frontend Hosting<br/>(Vercel/Netlify)"]
+        BackendDeploy["Backend Hosting<br/>(Render/Fly.io)"]
+        CDN["CDN & Asset Hosting"]
+    end
+
+    %% Clients
+    subgraph Clients["Client Applications"]
+        User1["User 1 Browser<br/>(Client A)"]
+        User2["User 2 Browser<br/>(Client B)"]
+        UserN["User N Browser<br/>(Client ...)"]
+    end
+
+    %% Testing & Monitoring
+    subgraph Testing["Testing & Quality Assurance"]
+        UnitTests["Unit Tests<br/>(Jest/Vitest)"]
+        IntegrationTests["Integration Tests<br/>(WebSocket testing)"]
+        E2ETests["E2E Tests<br/>(Cypress)"]
+        PerfTests["Performance Tests<br/>(FPS, Latency)"]
+    end
+
+    %% Data Flow Connections
+    Clients -->|WebSocket Connection| Frontend
+    Frontend -->|HTTP/REST API| Backend
+    Frontend -->|Real-time Updates| Backend
+    
+    Backend -->|Broadcast Messages| Clients
+    Backend -->|User Authentication| FirebaseAuth
+    Backend -->|Data Persistence| Firebase
+    Backend -->|AI Function Calls| OpenAI
+    
+    Frontend -->|Deploys to| FrontendDeploy
+    Backend -->|Deploys to| BackendDeploy
+    FrontendDeploy -->|Serves static assets via| CDN
+    
+    Testing -->|Tests| Frontend
+    Testing -->|Tests| Backend
+    Testing -->|Performance Monitoring| Clients
+
+    %% Internal Component Connections
+    subgraph FrontendInternals["Frontend Internal Flow"]
+        UserInteraction["User Interaction<br/>(Click, Drag, Type)"] --> CanvasRenderer["Canvas Renderer<br/>(Konva.js)"]
+        CanvasRenderer --> LocalState["Local State Update"]
+        LocalState --> WebSocketHook["useWebSocket Hook"]
+        WebSocketHook -->|Send Delta| Backend
+        WebSocketHook -->|Receive Updates| StateManager["State Manager"]
+        StateManager --> CanvasRenderer
+    end
+
+    subgraph BackendInternals["Backend Internal Flow"]
+        ClientMessage["Client Message"] --> MessageRouter["Message Router"]
+        MessageRouter --> CursorHandler["Cursor Handler"]
+        MessageRouter --> ObjectHandler["Object Handler"]
+        MessageRouter --> AuthHandler["Auth Handler"]
+        
+        CursorHandler -->|Broadcast| WSManager["WebSocket Manager"]
+        ObjectHandler -->|Broadcast| WSManager
+        ObjectHandler -->|Save State| Persistence["Persistence Layer"]
+        Persistence -->|Read/Write| Firebase
+        
+        AuthHandler -->|Validate| FirebaseAuth
+        WSManager -->|Send to| AllClients["All Connected Clients"]
+    end
+
+    %% Styling
+    classDef frontend fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef backend fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef external fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef deployment fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef clients fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef testing fill:#f1f8e9,stroke:#33691e,stroke-width:2px
+    
+    class Frontend,FrontendInternals frontend
+    class Backend,BackendInternals backend
+    class External external
+    class Deployment deployment
+    class Clients clients
+    class Testing testing
