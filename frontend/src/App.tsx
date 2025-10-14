@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import Login from './components/Auth/Login';
 import UserProfile from './components/Auth/UserProfile';
+import Canvas from './components/Canvas/Canvas';
 import './App.css';
 
 // Main application component (inside AuthProvider)
@@ -30,7 +31,7 @@ function AppContent() {
 
   // User is authenticated - show main app
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -82,48 +83,9 @@ function AppContent() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">
-              Welcome to CollabCanvas! 🎨
-            </h2>
-            <p className="text-lg text-gray-600 mb-8">
-              You're successfully authenticated. The canvas will be implemented next!
-            </p>
-            
-            <div className="bg-white overflow-hidden shadow rounded-lg max-w-md mx-auto">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                  Authentication Status
-                </h3>
-                <dl className="space-y-2">
-                  <div className="flex justify-between">
-                    <dt className="text-sm font-medium text-gray-500">Status:</dt>
-                    <dd className="text-sm text-green-600 font-semibold">✅ Authenticated</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-sm font-medium text-gray-500">User ID:</dt>
-                    <dd className="text-sm text-gray-900">{user.uid.substring(0, 8)}...</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-sm font-medium text-gray-500">Email Verified:</dt>
-                    <dd className="text-sm text-gray-900">
-                      {user.emailVerified ? '✅ Yes' : '❌ No'}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-sm font-medium text-gray-500">Provider:</dt>
-                    <dd className="text-sm text-gray-900">
-                      {user.providerData[0]?.providerId || 'Unknown'}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Main Canvas */}
+      <main className="flex-1">
+        <Canvas />
       </main>
 
       {/* Profile Modal */}
