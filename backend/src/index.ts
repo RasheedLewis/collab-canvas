@@ -67,6 +67,11 @@ app.get('/api/websocket/room/:roomId', (_req, res) => {
     });
 });
 
+app.get('/api/websocket/protocol', (_req, res) => {
+    const protocolInfo = wsManager.getProtocolInfo();
+    res.json(protocolInfo);
+});
+
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('Express error:', err);

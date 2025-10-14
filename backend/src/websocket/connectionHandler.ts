@@ -1,6 +1,14 @@
 import { WebSocket, WebSocketServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { Server } from 'http';
+import {
+    MessageRouter,
+    MessageProtocolValidator,
+    RateLimiter,
+    ERROR_CODES,
+    PROTOCOL_VERSION,
+    SUPPORTED_MESSAGE_TYPES
+} from './messageProtocol';
 
 export interface Client {
     id: string;
@@ -30,10 +38,15 @@ export class WebSocketConnectionManager {
     private clients: Map<string, Client> = new Map();
     private rooms: Map<string, Set<string>> = new Map();
     private heartbeatInterval: NodeJS.Timeout | null = null;
+    private messageRouter: MessageRouter;
+    private rateLimiter: RateLimiter;
 
     constructor(server: Server) {
         this.wss = new WebSocketServer({ server });
+        this.messageRouter = new MessageRouter();
+        this.rateLimiter = new RateLimiter(100, 60000); // 100 messages per minute
         this.initialize();
+        this.setupMessageHandlers();
         this.startHeartbeat();
     }
 
@@ -43,6 +56,19 @@ export class WebSocketConnectionManager {
         });
 
         console.log('📡 WebSocket Connection Manager initialized');
+    }
+
+    private setupMessageHandlers(): void {
+        console.log('🔧 Setting up message protocol handlers...');
+
+        // Register message handlers with the router
+        this.messageRouter.registerHandler('ping', this.handlePing.bind(this));
+        this.messageRouter.registerHandler('join_room', this.handleJoinRoom.bind(this));
+        this.messageRouter.registerHandler('leave_room', this.handleLeaveRoom.bind(this));
+        this.messageRouter.registerHandler('auth', this.handleAuthentication.bind(this));
+        this.messageRouter.registerHandler('heartbeat', this.handleHeartbeat.bind(this));
+
+        console.log(`✅ Registered handlers for: ${this.messageRouter.getRegisteredTypes().join(', ')}`);
     }
 
     private handleConnection(ws: WebSocket): void {
@@ -57,13 +83,14 @@ export class WebSocketConnectionManager {
         this.clients.set(clientId, client);
         console.log(`✅ Client connected: ${clientId}. Total clients: ${this.clients.size}`);
 
-        // Send welcome message to new client
+        // Send welcome message to new client with protocol version
         this.sendToClient(clientId, {
             type: 'connection_established',
             payload: {
                 clientId,
                 serverTime: Date.now(),
-                connectedClients: this.clients.size
+                connectedClients: this.clients.size,
+                protocolVersion: PROTOCOL_VERSION
             },
             timestamp: Date.now()
         });
@@ -78,15 +105,32 @@ export class WebSocketConnectionManager {
 
         const { ws } = client;
 
-        // Handle incoming messages
+        // Handle incoming messages with protocol validation and rate limiting
         ws.on('message', (data: Buffer) => {
+            // Check rate limit
+            if (!this.rateLimiter.checkLimit(clientId)) {
+                console.warn(`🚫 Rate limit exceeded for client ${clientId}`);
+                this.sendErrorMessage(clientId, ERROR_CODES.RATE_LIMIT_EXCEEDED, 'Too many messages. Please slow down.');
+                return;
+            }
+
             try {
-                const message: Message = JSON.parse(data.toString());
-                message.clientId = clientId; // Add client ID to message
-                this.handleMessage(clientId, message);
+                const rawMessage = JSON.parse(data.toString());
+
+                // Use message router for validation and handling
+                const success = this.messageRouter.route(clientId, rawMessage, {
+                    sendToClient: this.sendToClient.bind(this),
+                    manager: this
+                });
+
+                if (success) {
+                    console.log(`📨 Processed message from ${clientId}: ${rawMessage.type}`);
+                } else {
+                    console.warn(`⚠️ Failed to process message from ${clientId}: ${rawMessage.type}`);
+                }
             } catch (error) {
                 console.error(`❌ Error parsing message from client ${clientId}:`, error);
-                this.sendErrorMessage(clientId, 'Invalid message format');
+                this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, 'Failed to parse message');
             }
         });
 
@@ -111,61 +155,31 @@ export class WebSocketConnectionManager {
         });
     }
 
-    private handleMessage(clientId: string, message: Message): void {
-        const client = this.clients.get(clientId);
-        if (!client) {
-            console.warn(`⚠️ Received message from unknown client: ${clientId}`);
-            return;
-        }
-
-        console.log(`📨 Message from ${clientId} (${message.type}):`, message.payload ? Object.keys(message.payload) : 'no payload');
-
-        // Add timestamp if not present
-        if (!message.timestamp) {
-            message.timestamp = Date.now();
-        }
-
-        switch (message.type) {
-            case 'ping':
-                this.handlePing(clientId);
-                break;
-
-            case 'join_room':
-                this.handleJoinRoom(clientId, message);
-                break;
-
-            case 'leave_room':
-                this.handleLeaveRoom(clientId, message);
-                break;
-
-            case 'auth':
-                this.handleAuthentication(clientId, message);
-                break;
-
-            case 'heartbeat':
-                this.handleHeartbeat(clientId);
-                break;
-
-            default:
-                // Forward unhandled messages to other clients in the same room
-                this.broadcastToRoom(client.roomId, message, clientId);
-                break;
-        }
-    }
-
-    private handlePing(clientId: string): void {
+    // Message handlers (called by message router)
+    private handlePing(clientId: string, _message: any, _context: any): void {
         this.sendToClient(clientId, {
             type: 'pong',
             timestamp: Date.now()
         });
     }
 
-    private handleJoinRoom(clientId: string, message: Message): void {
+    private handleJoinRoom(clientId: string, message: any, _context: any): void {
         const { roomId, userInfo } = message.payload || {};
 
-        if (!roomId || typeof roomId !== 'string') {
-            this.sendErrorMessage(clientId, 'Valid room ID is required');
+        // Validate room ID using protocol validator
+        const roomValidation = MessageProtocolValidator.validateRoomId(roomId);
+        if (!roomValidation.valid) {
+            this.sendErrorMessage(clientId, roomValidation.error!.code, roomValidation.error!.message);
             return;
+        }
+
+        // Validate user info if provided
+        if (userInfo) {
+            const userValidation = MessageProtocolValidator.validateUserInfo(userInfo);
+            if (!userValidation.valid) {
+                this.sendErrorMessage(clientId, userValidation.error!.code, userValidation.error!.message);
+                return;
+            }
         }
 
         const client = this.clients.get(clientId);
@@ -217,7 +231,7 @@ export class WebSocketConnectionManager {
         }, clientId);
     }
 
-    private handleLeaveRoom(clientId: string, message: Message): void {
+    private handleLeaveRoom(clientId: string, message: any, _context: any): void {
         const { roomId: requestedRoomId } = message.payload || {};
         const client = this.clients.get(clientId);
         if (!client || !client.roomId) return;
@@ -233,16 +247,25 @@ export class WebSocketConnectionManager {
         });
     }
 
-    private handleAuthentication(clientId: string, message: Message): void {
+    private handleAuthentication(clientId: string, message: any, _context: any): void {
         const { token, userInfo } = message.payload || {};
 
         if (!token) {
-            this.sendErrorMessage(clientId, 'Authentication token required');
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication token required');
             return;
         }
 
         const client = this.clients.get(clientId);
         if (!client) return;
+
+        // Validate user info if provided
+        if (userInfo) {
+            const userValidation = MessageProtocolValidator.validateUserInfo(userInfo);
+            if (!userValidation.valid) {
+                this.sendErrorMessage(clientId, userValidation.error!.code, userValidation.error!.message);
+                return;
+            }
+        }
 
         // TODO: Verify token with Firebase (will be implemented in PR #8)
         // For now, accept any token and store user info
@@ -262,7 +285,7 @@ export class WebSocketConnectionManager {
         });
     }
 
-    private handleHeartbeat(clientId: string): void {
+    private handleHeartbeat(clientId: string, _message: any, _context: any): void {
         const client = this.clients.get(clientId);
         if (client) {
             client.isAlive = true;
@@ -283,8 +306,9 @@ export class WebSocketConnectionManager {
             this.leaveRoom(clientId, client.roomId);
         }
 
-        // Remove client
+        // Remove client and cleanup rate limit
         this.clients.delete(clientId);
+        this.rateLimiter.resetLimit(clientId);
 
         console.log(`👋 Client cleanup completed for: ${clientId}`);
     }
@@ -351,6 +375,9 @@ export class WebSocketConnectionManager {
                     client.ws.ping();
                 }
             });
+
+            // Cleanup expired rate limits
+            this.rateLimiter.cleanup();
         }, 30000); // Check every 30 seconds
     }
 
@@ -401,12 +428,9 @@ export class WebSocketConnectionManager {
         return sentCount;
     }
 
-    public sendErrorMessage(clientId: string, error: string): void {
-        this.sendToClient(clientId, {
-            type: 'error',
-            payload: { error, code: 'WEBSOCKET_ERROR' },
-            timestamp: Date.now()
-        });
+    public sendErrorMessage(clientId: string, code: string, message: string, details?: any): void {
+        const errorMessage = MessageProtocolValidator.createErrorMessage(code as any, message, details);
+        this.sendToClient(clientId, errorMessage);
     }
 
     // Getters for monitoring
@@ -429,6 +453,34 @@ export class WebSocketConnectionManager {
     public getClientsInRoom(roomId: string): string[] {
         const room = this.rooms.get(roomId);
         return room ? Array.from(room) : [];
+    }
+
+    public getProtocolInfo(): {
+        version: string;
+        supportedMessageTypes: readonly string[];
+        registeredHandlers: string[];
+        stats: {
+            totalClients: number;
+            totalRooms: number;
+            rateLimitSettings: {
+                maxMessages: number;
+                windowMs: number;
+            };
+        };
+    } {
+        return {
+            version: PROTOCOL_VERSION,
+            supportedMessageTypes: SUPPORTED_MESSAGE_TYPES,
+            registeredHandlers: this.messageRouter.getRegisteredTypes(),
+            stats: {
+                totalClients: this.clients.size,
+                totalRooms: this.rooms.size,
+                rateLimitSettings: {
+                    maxMessages: 100, // From constructor
+                    windowMs: 60000
+                }
+            }
+        };
     }
 
     // Cleanup method
