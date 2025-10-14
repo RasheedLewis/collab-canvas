@@ -4,9 +4,10 @@ import Konva from 'konva';
 import GridBackground from './GridBackground';
 import CanvasRectangle from './CanvasRectangle';
 import CanvasCircle from './CanvasCircle';
+import CanvasText from './CanvasText';
 import Toolbar from './Toolbar';
 import { useCanvasStore } from '../../store/canvasStore';
-import type { RectangleObject, CircleObject } from '../../types/canvas';
+import type { RectangleObject, CircleObject, TextObject } from '../../types/canvas';
 
 interface CanvasProps {
   width?: number;
@@ -14,7 +15,7 @@ interface CanvasProps {
 }
 
 const Canvas: React.FC<CanvasProps> = ({ 
-  width = window.innerWidth, 
+  width = window.innerWidth - 112, // Account for left toolbar (80px width + 32px margins)
   height = window.innerHeight - 80 // Account for header height
 }) => {
   const stageRef = useRef<Konva.Stage>(null);
@@ -33,13 +34,13 @@ const Canvas: React.FC<CanvasProps> = ({
     radius?: number;
   } | null>(null);
   
-  const { objects, tool, createRectangle, createCircle, selectObject } = useCanvasStore();
+  const { objects, tool, createRectangle, createCircle, createText, selectObject } = useCanvasStore();
 
   // Handle window resize
   useEffect(() => {
     const handleResize = () => {
       if (stageRef.current) {
-        stageRef.current.width(window.innerWidth);
+        stageRef.current.width(window.innerWidth - 112); // Account for toolbar
         stageRef.current.height(window.innerHeight - 80);
       }
     };
@@ -112,12 +113,20 @@ const Canvas: React.FC<CanvasProps> = ({
       // Deselect any selected objects when clicking on empty canvas
       selectObject(null);
       
-      if (tool === 'rectangle' || tool === 'circle') {
+      if (tool === 'rectangle' || tool === 'circle' || tool === 'text') {
         const stage = stageRef.current;
         if (stage) {
           const pointer = stage.getPointerPosition();
           if (pointer) {
             const canvasCoords = getCanvasCoordinates(pointer.x, pointer.y);
+            
+            // Text objects are created immediately on click
+            if (tool === 'text') {
+              createText(canvasCoords.x, canvasCoords.y);
+              return;
+            }
+            
+            // Rectangle and circle use drag-to-create
             setIsCreating(true);
             setCreationStart(canvasCoords);
             
@@ -210,10 +219,11 @@ const Canvas: React.FC<CanvasProps> = ({
     <div 
       className="canvas-container relative overflow-hidden"
       style={{ 
-        width: '100vw', 
+        width: 'calc(100vw - 112px)', // Account for left toolbar
         height: 'calc(100vh - 80px)', // Account for header
         backgroundColor: '#f8f9fa',
-        cursor: 'grab'
+        cursor: 'grab',
+        marginLeft: '112px' // Push canvas right of toolbar
       }}
     >
       <Stage
@@ -231,7 +241,7 @@ const Canvas: React.FC<CanvasProps> = ({
         scaleX={stageScale}
         scaleY={stageScale}
         style={{ 
-          cursor: (tool === 'rectangle' || tool === 'circle') ? 'crosshair' : tool === 'select' ? 'grab' : 'default'
+          cursor: (tool === 'rectangle' || tool === 'circle' || tool === 'text') ? 'crosshair' : tool === 'select' ? 'grab' : 'default'
         }}
       >
         <Layer>
@@ -261,8 +271,14 @@ const Canvas: React.FC<CanvasProps> = ({
                   circle={obj as CircleObject} 
                 />
               );
+            } else if (obj.type === 'text') {
+              return (
+                <CanvasText 
+                  key={obj.id} 
+                  textObject={obj as TextObject} 
+                />
+              );
             }
-            // Add text objects here later
             return null;
           })}
           
@@ -303,7 +319,7 @@ const Canvas: React.FC<CanvasProps> = ({
       <Toolbar />
       
       {/* Debug info */}
-      <div className="absolute top-4 left-4 bg-white bg-opacity-90 rounded-lg p-3 shadow-lg text-sm font-mono">
+      <div className="absolute top-4 right-4 bg-white bg-opacity-90 rounded-lg p-3 shadow-lg text-sm font-mono">
         <div>Scale: {stageScale.toFixed(2)}x</div>
         <div>Position: ({stagePos.x.toFixed(0)}, {stagePos.y.toFixed(0)})</div>
         <div>Objects: {objects.length}</div>
@@ -311,13 +327,32 @@ const Canvas: React.FC<CanvasProps> = ({
         {isCreating && <div className="text-blue-600">Creating...</div>}
       </div>
       
-      {/* Controls info */}
-      <div className="absolute bottom-4 right-4 bg-white bg-opacity-90 rounded-lg p-3 shadow-lg text-sm">
-        <div className="font-semibold mb-2">Controls:</div>
-        <div>• Mouse wheel to zoom (0.1x - 5x)</div>
-        <div>• {tool === 'select' ? 'Drag canvas to pan' : 'Select tool to drag canvas'}</div>
-        <div>• {(tool === 'rectangle' || tool === 'circle') ? 'Drag to create shapes' : 'Click objects to select'}</div>
-        <div>• Drag objects to move</div>
+      {/* Instructions panel */}
+      <div className="absolute bottom-4 right-4 bg-white bg-opacity-95 rounded-xl p-4 shadow-xl border border-gray-200 max-w-xs">
+        <div className="font-semibold mb-3 text-gray-800 flex items-center">
+          <span className="text-lg mr-2">💡</span>
+          Quick Guide
+        </div>
+        <div className="space-y-2 text-sm text-gray-600">
+          <div className="flex items-start space-x-2">
+            <span className="text-blue-600 font-medium">•</span>
+            <span>Mouse wheel to zoom (0.1x - 5x)</span>
+          </div>
+          <div className="flex items-start space-x-2">
+            <span className="text-blue-600 font-medium">•</span>
+            <span>{tool === 'select' ? 'Drag canvas to pan' : 'Select tool to drag canvas'}</span>
+          </div>
+          <div className="flex items-start space-x-2">
+            <span className="text-blue-600 font-medium">•</span>
+            <span>
+              {(tool === 'rectangle' || tool === 'circle') 
+                ? 'Drag to create shapes' 
+                : tool === 'text' 
+                ? 'Click to create text, double-click to edit' 
+                : 'Click objects to select and move'}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );

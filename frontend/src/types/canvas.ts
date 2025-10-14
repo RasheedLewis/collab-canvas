@@ -60,3 +60,19 @@ export const COLOR_PALETTE = [
 ] as const;
 
 export type PaletteColor = typeof COLOR_PALETTE[number];
+
+// Color names mapping for better UX
+export const COLOR_NAMES: Record<PaletteColor, string> = {
+    '#3b82f6': 'Blue',
+    '#ef4444': 'Red',
+    '#10b981': 'Green',
+    '#f59e0b': 'Yellow',
+    '#8b5cf6': 'Purple',
+    '#f97316': 'Orange',
+    '#06b6d4': 'Cyan',
+    '#84cc16': 'Lime',
+    '#ec4899': 'Pink',
+    '#6b7280': 'Gray',
+    '#1f2937': 'Dark Gray',
+    '#ffffff': 'White'
+};

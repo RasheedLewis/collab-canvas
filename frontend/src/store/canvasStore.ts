@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { CanvasObject, RectangleObject, CircleObject, CanvasState } from '../types/canvas';
+import type { CanvasObject, RectangleObject, CircleObject, TextObject, CanvasState } from '../types/canvas';
 import { COLOR_PALETTE } from '../types/canvas';
 
 interface CanvasStore extends CanvasState {
@@ -15,6 +15,13 @@ interface CanvasStore extends CanvasState {
     // Shape-specific actions
     createRectangle: (x: number, y: number, width?: number, height?: number) => RectangleObject;
     createCircle: (x: number, y: number, radius?: number) => CircleObject;
+    createText: (x: number, y: number, text?: string) => TextObject;
+
+    // Text-specific actions
+    activeFontSize: number;
+    setActiveFontSize: (size: number) => void;
+    editingTextId: string | null;
+    setEditingTextId: (id: string | null) => void;
 
     // Utility functions
     getObjectById: (id: string) => CanvasObject | undefined;
@@ -33,6 +40,8 @@ export const useCanvasStore = create<CanvasStore>()(
             selectedObjectId: null,
             tool: 'select',
             activeColor: COLOR_PALETTE[0], // Default to blue
+            activeFontSize: 16, // Default font size
+            editingTextId: null,
 
             // Actions
             addObject: (object) =>
@@ -96,6 +105,30 @@ export const useCanvasStore = create<CanvasStore>()(
                 get().addObject(circle);
                 return circle;
             },
+
+            createText: (x, y, text = 'New Text') => {
+                const textObject: TextObject = {
+                    id: generateId(),
+                    type: 'text',
+                    x,
+                    y,
+                    text,
+                    fontSize: get().activeFontSize,
+                    fontFamily: 'Arial, sans-serif',
+                    color: get().activeColor,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                };
+
+                get().addObject(textObject);
+                return textObject;
+            },
+
+            setActiveFontSize: (size) =>
+                set({ activeFontSize: size }, false, 'setActiveFontSize'),
+
+            setEditingTextId: (id) =>
+                set({ editingTextId: id }, false, 'setEditingTextId'),
 
             getObjectById: (id) => {
                 return get().objects.find((obj) => obj.id === id);
