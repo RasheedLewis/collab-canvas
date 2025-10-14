@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        button {
+            padding: 8px 16px;
+            margin: 4px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        input,
+        textarea {
+            padding: 8px;
+            margin: 4px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .log {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>WebSocket Connection Test</h1>
+
+    <div class="container">
+        <h3>Connection Status</h3>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <p>
+            <strong>WebSocket URL:</strong> <span id="wsUrl">ws://localhost:3000</span><br>
+            <strong>Client ID:</strong> <span id="clientId">None</span><br>
+            <strong>Room ID:</strong> <span id="roomId">None</span>
+        </p>
+    </div>
+
+    <div class="container">
+        <h3>Controls</h3>
+        <button id="connectBtn" onclick="connect()">Connect</button>
+        <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+        <button id="pingBtn" onclick="sendPing()" disabled>Send Ping</button>
+        <br><br>
+
+        <input type="text" id="roomInput" placeholder="Room ID" value="test-room">
+        <button id="joinRoomBtn" onclick="joinRoom()" disabled>Join Room</button>
+        <button id="leaveRoomBtn" onclick="leaveRoom()" disabled>Leave Room</button>
+        <br><br>
+
+        <input type="text" id="messageInput" placeholder="Custom message" style="width: 200px;">
+        <button id="sendMessageBtn" onclick="sendCustomMessage()" disabled>Send Message</button>
+
+        <br><br>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <div class="container">
+        <h3>Message Log</h3>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let clientId = null;
+        let currentRoomId = null;
+
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateStatus(state, message) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${state}`;
+            statusDiv.textContent = message;
+
+            // Update UI elements
+            document.getElementById('clientId').textContent = clientId || 'None';
+            document.getElementById('roomId').textContent = currentRoomId || 'None';
+
+            // Enable/disable buttons
+            const connected = state === 'connected';
+            document.getElementById('disconnectBtn').disabled = !connected;
+            document.getElementById('pingBtn').disabled = !connected;
+            document.getElementById('joinRoomBtn').disabled = !connected;
+            document.getElementById('leaveRoomBtn').disabled = !connected;
+            document.getElementById('sendMessageBtn').disabled = !connected;
+            document.getElementById('connectBtn').disabled = connected;
+        }
+
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('Already connected');
+                return;
+            }
+
+            const wsUrl = document.getElementById('wsUrl').textContent;
+            log(`Connecting to ${wsUrl}...`);
+            updateStatus('connecting', 'Connecting...');
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function (event) {
+                log('WebSocket connection established');
+                updateStatus('connected', 'Connected');
+            };
+
+            ws.onmessage = function (event) {
+                try {
+                    const message = JSON.parse(event.data);
+                    log(`📥 Received: ${message.type} ${message.payload ? JSON.stringify(message.payload) : ''}`);
+
+                    // Handle specific message types
+                    switch (message.type) {
+                        case 'connection_established':
+                            clientId = message.payload.clientId;
+                            log(`✅ Client ID assigned: ${clientId}`);
+                            break;
+                        case 'room_joined':
+                            currentRoomId = message.payload.roomId;
+                            log(`🏠 Joined room: ${currentRoomId}`);
+                            break;
+                        case 'room_left':
+                            currentRoomId = null;
+                            log('🚪 Left room');
+                            break;
+                        case 'user_joined':
+                            log(`👋 User joined room: ${message.payload.userId}`);
+                            break;
+                        case 'user_left':
+                            log(`👋 User left room: ${message.payload.userId}`);
+                            break;
+                        case 'error':
+                            log(`❌ Error: ${message.payload.error}`);
+                            break;
+                    }
+
+                    updateStatus('connected', 'Connected');
+                } catch (error) {
+                    log(`❌ Error parsing message: ${error.message}`);
+                }
+            };
+
+            ws.onclose = function (event) {
+                log(`WebSocket connection closed (${event.code}: ${event.reason})`);
+                updateStatus('disconnected', 'Disconnected');
+                clientId = null;
+                currentRoomId = null;
+            };
+
+            ws.onerror = function (error) {
+                log(`❌ WebSocket error: ${error}`);
+                updateStatus('error', 'Connection Error');
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                log('Disconnecting...');
+                ws.close(1000, 'Manual disconnect');
+            }
+        }
+
+        function sendMessage(message) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const messageWithTimestamp = {
+                    ...message,
+                    timestamp: Date.now()
+                };
+                ws.send(JSON.stringify(messageWithTimestamp));
+                log(`📤 Sent: ${message.type} ${message.payload ? JSON.stringify(message.payload) : ''}`);
+                return true;
+            } else {
+                log('❌ Cannot send message: not connected');
+                return false;
+            }
+        }
+
+        function sendPing() {
+            sendMessage({ type: 'ping' });
+        }
+
+        function joinRoom() {
+            const roomInput = document.getElementById('roomInput');
+            const roomId = roomInput.value.trim();
+            if (!roomId) {
+                log('❌ Please enter a room ID');
+                return;
+            }
+
+            sendMessage({
+                type: 'join_room',
+                payload: {
+                    roomId: roomId,
+                    userInfo: {
+                        uid: 'test-user',
+                        email: 'test@example.com',
+                        name: 'Test User',
+                        picture: null,
+                        displayName: 'Test User'
+                    }
+                }
+            });
+        }
+
+        function leaveRoom() {
+            sendMessage({ type: 'leave_room', payload: {} });
+        }
+
+        function sendCustomMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            if (!message) {
+                log('❌ Please enter a message');
+                return;
+            }
+
+            sendMessage({
+                type: 'custom_message',
+                payload: { text: message }
+            });
+            messageInput.value = '';
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        // Auto-connect on page load for testing
+        window.addEventListener('load', function () {
+            log('WebSocket test page loaded');
+            // Uncomment the next line to auto-connect
+            // connect();
+        });
+    </script>
+</body>
+
+</html>

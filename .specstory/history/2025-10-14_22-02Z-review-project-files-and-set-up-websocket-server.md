@@ -1352,3 +1352,335 @@ The implementation follows the modular architecture specified in the task breakd
 
 ---
 
+_**User (2025-10-14 14:11Z)**_
+
+Yes, proceed to the next subtask
+
+---
+
+_**Assistant (claude-4-sonnet-thinking)**_
+
+<think><details><summary>Thought Process</summary>The user wants me to proceed to the next subtask of PR 3. Looking at the todo list I created earlier:
+
+1. ✅ "Set up WebSocket server with connection management" - COMPLETED
+2. ⏳ "Create WebSocket client hook" - PENDING (this should be next)
+3. ⏳ "Implement connection state management" - PENDING
+4. ⏳ "Add basic message protocol (join, leave, error)" - PENDING
+5. ⏳ "Handle client disconnects/reconnects" - PENDING
+
+I can see from the terminal output that the server is now running successfully with the WebSocket connection manager. The server shows:
+- Firebase Admin initialized
+- WebSocket Connection Manager initialized
+- Server running on port 3000
+- Heartbeat checks running every 30 seconds
+
+So the next subtask should be "Create WebSocket client hook" which will be implemented in the frontend. Let me update the todo and start working on this.</details></think>
+
+---
+
+Perfect! I can see from the terminal output that the WebSocket server is running successfully. The server shows:
+- ✅ Firebase Admin initialized 
+- ✅ WebSocket Connection Manager initialized
+- ✅ Server running on port 3000
+- ✅ Heartbeat checks running properly
+
+Now I'll proceed to the next subtask: **Create WebSocket client hook** for the frontend.
+
+---
+
+Tool use: **todo_write**
+
+## Todo List
+
+- [x] Set up WebSocket server with connection management
+- [-] Create WebSocket client hook
+- [ ] Implement connection state management
+- [ ] Add basic message protocol (join, leave, error)
+- [ ] Handle client disconnects/reconnects
+
+---
+
+<think><details><summary>Thought Process</summary>Now I need to create the WebSocket client hook for the frontend. According to the task.md file, this is part of PR #3. Let me look at what needs to be implemented:
+
+From the task breakdown:
+- `frontend/src/hooks/useWebSocket.ts` (NEW)
+
+I need to create a React hook that:
+1. Manages WebSocket connection to the backend
+2. Handles connection state (connecting, connected, disconnected, error)
+3. Provides methods to send messages
+4. Handles incoming messages
+5. Implements reconnection logic
+6. Integrates with the message protocol I established in the backend
+
+Let me first check the frontend structure to understand how to integrate this properly.</details></think>
+
+---
+
+Tool use: **list_dir**
+
+<details>
+            <summary>Listed directory undefined • **0** results</summary>
+        
+No results found
+</details>
+
+---
+
+<think><details><summary>Thought Process</summary>Good! I can see the frontend structure. There's already a `hooks/` directory with `useAuth.tsx` and `useAuthZustand.ts`, so I'll add the new `useWebSocket.ts` hook there.
+
+Let me also check the existing auth hook to understand the patterns being used, and look at the types to see if I need to add any WebSocket-related types.</details></think>
+
+---
+
+Tool use: **read_file**
+
+Read file: /Users/rasheedlewis/Workspace/gauntlet/collab-canvas/frontend/src/hooks/useAuth.tsx
+
+---
+
+Tool use: **read_file**
+
+Read file: /Users/rasheedlewis/Workspace/gauntlet/collab-canvas/frontend/src/types/canvas.ts
+
+---
+
+<think><details><summary>Thought Process</summary>Perfect! Now I understand the patterns used in the codebase. I can see that:
+
+1. The auth hook uses React Context pattern for state management
+2. They have a clean interface definition approach
+3. There's already a types folder for canvas-related types
+
+Now I need to create the WebSocket hook. Based on the backend implementation I just created, I need to create a hook that:
+
+1. Manages WebSocket connection state
+2. Handles the message protocol (ping/pong, join_room, leave_room, auth, etc.)
+3. Provides methods to send messages
+4. Handles reconnection logic
+5. Integrates with authentication
+
+Let me create the WebSocket types first, then the hook itself.</details></think>
+
+---
+
+Tool use: **write**
+
+
+<details><summary>Edit file: /Users/rasheedlewis/Workspace/gauntlet/collab-canvas/frontend/src/types/websocket.ts</summary>
+
+**Chunk 1**
+Lines added: 190, lines removed: 1
+
+```diff
+@@ -1,1 +1,190 @@
+- 
++ // WebSocket connection states
++ export type WebSocketConnectionState = 
++     | 'connecting' 
++     | 'connected' 
++     | 'disconnected' 
++     | 'reconnecting' 
++     | 'error';
++ 
++ // WebSocket message types
++ export interface WebSocketMessage {
++     type: string;
++     payload?: any;
++     timestamp?: number;
++     clientId?: string;
++ }
++ 
++ // User information for WebSocket communication
++ export interface WebSocketUser {
++     uid: string;
++     email: string | null;
++     name: string | null;
++     picture: string | null;
++     displayName?: string;
++     avatarColor?: string;
++ }
++ 
++ // Connection events
++ export interface ConnectionEstablishedPayload {
++     clientId: string;
++     serverTime: number;
++     connectedClients: number;
++ }
++ 
++ export interface RoomJoinedPayload {
++     roomId: string;
++     userId: string;
++     roomMembers: Array<{
++         clientId: string;
++         user?: WebSocketUser;
++     }>;
++ }
++ 
++ export interface UserJoinedPayload {
++     userId: string;
++     roomId: string;
++     userInfo?: WebSocketUser;
++     roomMembers: number;
++ }
++ 
++ export interface UserLeftPayload {
++     userId: string;
++     roomId: string;
++     userInfo?: WebSocketUser;
++     remainingUsers: number;
++ }
++ 
++ export interface AuthSuccessPayload {
++     userId: string;
++     user?: WebSocketUser;
++ }
++ 
++ export interface ErrorPayload {
++     error: string;
++     code?: string;
++ }
++ 
++ // Message type definitions with their payloads
++ export interface PingMessage extends WebSocketMessage {
++     type: 'ping';
++ }
++ 
++ export interface PongMessage extends WebSocketMessage {
++     type: 'pong';
++ }
++ 
++ export interface JoinRoomMessage extends WebSocketMessage {
++     type: 'join_room';
++     payload: {
++         roomId: string;
++         userInfo?: WebSocketUser;
++     };
++ }
++ 
++ export interface LeaveRoomMessage extends WebSocketMessage {
++     type: 'leave_room';
++     payload: {
++         roomId?: string;
++     };
++ }
++ 
++ export interface AuthMessage extends WebSocketMessage {
++     type: 'auth';
++     payload: {
++         token: string;
++         userInfo?: WebSocketUser;
++     };
++ }
++ 
++ export interface HeartbeatMessage extends WebSocketMessage {
++     type: 'heartbeat';
++ }
++ 
++ export interface ConnectionEstablishedMessage extends WebSocketMessage {
++     type: 'connection_established';
++     payload: ConnectionEstablishedPayload;
++ }
++ 
++ export interface RoomJoinedMessage extends WebSocketMessage {
++     type: 'room_joined';
++     payload: RoomJoinedPayload;
++ }
++ 
++ export interface UserJoinedMessage extends WebSocketMessage {
++     type: 'user_joined';
++     payload: UserJoinedPayload;
++ }
++ 
++ export interface UserLeftMessage extends WebSocketMessage {
++     type: 'user_left';
++     payload: UserLeftPayload;
++ }
++ 
++ export interface AuthSuccessMessage extends WebSocketMessage {
++     type: 'auth_success';
++     payload: AuthSuccessPayload;
++ }
++ 
++ export interface ErrorMessage extends WebSocketMessage {
++     type: 'error';
++     payload: ErrorPayload;
++ }
++ 
++ export interface ServerShutdownMessage extends WebSocketMessage {
++     type: 'server_shutdown';
++     payload: {
++         message: string;
++     };
++ }
++ 
++ // WebSocket hook configuration
++ export interface WebSocketConfig {
++     url: string;
++     reconnectInterval?: number;
++     maxReconnectAttempts?: number;
++     heartbeatInterval?: number;
++     protocols?: string[];
++ }
++ 
++ // WebSocket hook return type
++ export interface WebSocketHookReturn {
++     // Connection state
++     connectionState: WebSocketConnectionState;
++     isConnected: boolean;
++     clientId: string | null;
++     roomId: string | null;
++     
++     // Connection methods
++     connect: () => void;
++     disconnect: () => void;
++     
++     // Room management
++     joinRoom: (roomId: string, userInfo?: WebSocketUser) => void;
++     leaveRoom: (roomId?: string) => void;
++     
++     // Authentication
++     authenticate: (token: string, userInfo?: WebSocketUser) => void;
++     
++     // Message sending
++     sendMessage: (message: WebSocketMessage) => void;
++     sendPing: () => void;
++     
++     // Event listeners
++     onMessage: (callback: (message: WebSocketMessage) => void) => () => void;
++     onConnectionChange: (callback: (state: WebSocketConnectionState) => void) => () => void;
++     onUserJoined: (callback: (payload: UserJoinedPayload) => void) => () => void;
++     onUserLeft: (callback: (payload: UserLeftPayload) => void) => () => void;
++     onError: (callback: (error: ErrorPayload) => void) => () => void;
++     
++     // Connection info
++     lastError: string | null;
++     reconnectAttempts: number;
++     serverTime: number | null;
++ }
++ 
++ // Event callback types
++ export type MessageCallback = (message: WebSocketMessage) => void;
++ export type ConnectionStateCallback = (state: WebSocketConnectionState) => void;
++ export type UserJoinedCallback = (payload: UserJoinedPayload) => void;
++ export type UserLeftCallback = (payload: UserLeftPayload) => void;
++ export type ErrorCallback = (payload: ErrorPayload) => void;
+```
+
+</details>
+
+---
+
+<think><details><summary>Thought Process</summary>Great! Now I have comprehensive types for the WebSocket implementation. Next, I'll create the `useWebSocket` hook that will manage the WebSocket connection, handle reconnections, and provide a clean interface for the rest of the application to use.
+
+Let me create the WebSocket hook with proper error handling, reconnection logic, and event management.</details></think>
+
+---
+
+Tool use: **write**
+
+---
+
+
+
+---
+
