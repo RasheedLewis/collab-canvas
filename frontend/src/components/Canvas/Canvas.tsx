@@ -1,7 +1,11 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Stage, Layer, Rect, Text, Circle } from 'react-konva';
+import { Stage, Layer } from 'react-konva';
 import Konva from 'konva';
 import GridBackground from './GridBackground';
+import CanvasRectangle from './CanvasRectangle';
+import Toolbar from './Toolbar';
+import { useCanvasStore } from '../../store/canvasStore';
+import type { RectangleObject } from '../../types/canvas';
 
 interface CanvasProps {
   width?: number;
@@ -15,6 +19,8 @@ const Canvas: React.FC<CanvasProps> = ({
   const stageRef = useRef<Konva.Stage>(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const [stageScale, setStageScale] = useState(1);
+  
+  const { objects, tool, createRectangle, selectObject } = useCanvasStore();
 
   // Handle window resize
   useEffect(() => {
@@ -75,6 +81,29 @@ const Canvas: React.FC<CanvasProps> = ({
     });
   };
 
+  // Handle stage click for creating rectangles
+  const handleStageClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    // Only create rectangles if we clicked on the stage itself (not on an object)
+    if (e.target === stageRef.current) {
+      // Deselect any selected objects when clicking on empty canvas
+      selectObject(null);
+      
+      if (tool === 'rectangle') {
+        const stage = stageRef.current;
+        if (stage) {
+          const pointer = stage.getPointerPosition();
+          if (pointer) {
+            // Convert screen coordinates to canvas coordinates
+            const canvasX = (pointer.x - stagePos.x) / stageScale;
+            const canvasY = (pointer.y - stagePos.y) / stageScale;
+            
+            createRectangle(canvasX, canvasY);
+          }
+        }
+      }
+    }
+  };
+
   return (
     <div 
       className="canvas-container relative overflow-hidden"
@@ -90,13 +119,17 @@ const Canvas: React.FC<CanvasProps> = ({
         width={width}
         height={height}
         onWheel={handleWheel}
-        draggable
+        draggable={tool === 'select'}
         onDragEnd={handleDragEnd}
+        onClick={handleStageClick}
+        onTap={handleStageClick}
         x={stagePos.x}
         y={stagePos.y}
         scaleX={stageScale}
         scaleY={stageScale}
-        style={{ cursor: 'grab' }}
+        style={{ 
+          cursor: tool === 'rectangle' ? 'crosshair' : tool === 'select' ? 'grab' : 'default'
+        }}
       >
         <Layer>
           {/* Grid background */}
@@ -109,70 +142,40 @@ const Canvas: React.FC<CanvasProps> = ({
             gridSize={50}
           />
           
-          {/* Demo shapes to test Konva integration */}
-          <Rect
-            x={200}
-            y={150}
-            width={150}
-            height={100}
-            fill="#3b82f6"
-            stroke="#1d4ed8"
-            strokeWidth={2}
-            cornerRadius={8}
-            shadowBlur={10}
-            shadowColor="rgba(0,0,0,0.3)"
-            shadowOffset={{ x: 2, y: 2 }}
-          />
-          
-          <Circle
-            x={450}
-            y={200}
-            radius={60}
-            fill="#ef4444"
-            stroke="#dc2626"
-            strokeWidth={2}
-            shadowBlur={10}
-            shadowColor="rgba(0,0,0,0.3)"
-            shadowOffset={{ x: 2, y: 2 }}
-          />
-          
-          <Text
-            x={200}
-            y={300}
-            text="Konva.js Canvas 🎨"
-            fontSize={24}
-            fontFamily="Arial, sans-serif"
-            fill="#1f2937"
-            fontStyle="bold"
-            shadowBlur={5}
-            shadowColor="rgba(0,0,0,0.2)"
-            shadowOffset={{ x: 1, y: 1 }}
-          />
-          
-          <Text
-            x={200}
-            y={340}
-            text="✅ Pan, zoom, and grid background working!"
-            fontSize={16}
-            fontFamily="Arial, sans-serif"
-            fill="#059669"
-          />
+          {/* Render canvas objects */}
+          {objects.map((obj) => {
+            if (obj.type === 'rectangle') {
+              return (
+                <CanvasRectangle 
+                  key={obj.id} 
+                  rectangle={obj as RectangleObject} 
+                />
+              );
+            }
+            // Add other object types here later (circle, text)
+            return null;
+          })}
         </Layer>
       </Stage>
+      
+      {/* Toolbar */}
+      <Toolbar />
       
       {/* Debug info */}
       <div className="absolute top-4 left-4 bg-white bg-opacity-90 rounded-lg p-3 shadow-lg text-sm font-mono">
         <div>Scale: {stageScale.toFixed(2)}x</div>
         <div>Position: ({stagePos.x.toFixed(0)}, {stagePos.y.toFixed(0)})</div>
-        <div>Canvas Size: {width} x {height}</div>
+        <div>Objects: {objects.length}</div>
+        <div>Tool: {tool}</div>
       </div>
       
-      {/* Instructions */}
+      {/* Controls info */}
       <div className="absolute bottom-4 right-4 bg-white bg-opacity-90 rounded-lg p-3 shadow-lg text-sm">
         <div className="font-semibold mb-2">Controls:</div>
-        <div>• Drag to pan</div>
-        <div>• Mouse wheel to zoom</div>
-        <div>• Zoom: 0.1x - 5x</div>
+        <div>• Mouse wheel to zoom (0.1x - 5x)</div>
+        <div>• {tool === 'select' ? 'Drag canvas to pan' : 'Select tool to drag canvas'}</div>
+        <div>• Click rectangles to select</div>
+        <div>• Drag rectangles to move</div>
       </div>
     </div>
   );
