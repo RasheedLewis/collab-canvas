@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connection State Management Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .status-card {
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+        }
+
+        .status-connected {
+            background: #d1fae5;
+            border-color: #10b981;
+        }
+
+        .status-connecting {
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+
+        .status-disconnected {
+            background: #f3f4f6;
+            border-color: #6b7280;
+        }
+
+        .status-error {
+            background: #fee2e2;
+            border-color: #ef4444;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #2563eb;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #dc2626;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #059669;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-warning:hover:not(:disabled) {
+            background: #d97706;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #4b5563;
+        }
+
+        input {
+            padding: 10px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .log {
+            background: #1f2937;
+            color: #10b981;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 12px;
+            border-radius: 8px;
+            line-height: 1.4;
+        }
+
+        .user-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .user-card {
+            padding: 10px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+        }
+
+        .user-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: #f9fafb;
+            border-radius: 6px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔌 Connection State Management Test</h1>
+    <p>This page tests the WebSocket connection with the React-based state management system on the backend.</p>
+
+    <!-- Connection Status -->
+    <div class="container">
+        <h2>Connection Status</h2>
+        <div class="status-grid">
+            <div id="connectionStatus" class="status-card status-disconnected">
+                <div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">Disconnected</div>
+                <div style="font-size: 14px; color: #6b7280;">Ready to connect</div>
+            </div>
+            <div class="status-card">
+                <div style="font-weight: bold;">Client ID</div>
+                <div id="clientId" style="font-family: monospace; font-size: 12px;">None</div>
+            </div>
+            <div class="status-card">
+                <div style="font-weight: bold;">Current Room</div>
+                <div id="currentRoom" style="font-family: monospace; font-size: 12px;">None</div>
+            </div>
+            <div class="status-card">
+                <div style="font-weight: bold;">Room Members</div>
+                <div id="memberCount" style="font-size: 24px;">0</div>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div id="messagesSent" class="stat-value">0</div>
+                <div class="stat-label">Sent</div>
+            </div>
+            <div class="stat-item">
+                <div id="messagesReceived" class="stat-value">0</div>
+                <div class="stat-label">Received</div>
+            </div>
+            <div class="stat-item">
+                <div id="connectionAttempts" class="stat-value">0</div>
+                <div class="stat-label">Attempts</div>
+            </div>
+            <div class="stat-item">
+                <div id="reconnectAttempts" class="stat-value">0</div>
+                <div class="stat-label">Reconnects</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Controls -->
+    <div class="container">
+        <h3>Connection Controls</h3>
+        <div class="controls">
+            <button id="connectBtn" class="btn-primary" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" class="btn-danger" onclick="disconnect()" disabled>Disconnect</button>
+            <button id="reconnectBtn" class="btn-warning" onclick="reconnect()">Reconnect</button>
+            <button id="pingBtn" class="btn-secondary" onclick="sendPing()" disabled>Send Ping</button>
+        </div>
+    </div>
+
+    <!-- Room Management -->
+    <div class="container">
+        <h3>Room Management</h3>
+        <div class="controls">
+            <input type="text" id="roomInput" placeholder="Room ID" value="test-connection-room" style="width: 200px;">
+            <button id="generateRoomBtn" class="btn-secondary" onclick="generateRoom()">Generate</button>
+            <button id="joinRoomBtn" class="btn-success" onclick="joinRoom()" disabled>Join Room</button>
+            <button id="leaveRoomBtn" class="btn-warning" onclick="leaveRoom()" disabled>Leave Room</button>
+        </div>
+    </div>
+
+    <!-- Connected Users -->
+    <div class="container" id="usersContainer" style="display: none;">
+        <h3>Connected Users</h3>
+        <div id="usersList" class="user-list"></div>
+    </div>
+
+    <!-- Custom Messages -->
+    <div class="container">
+        <h3>Custom Messages</h3>
+        <div class="controls">
+            <input type="text" id="messageInput" placeholder="Custom message" style="width: 300px;">
+            <button id="sendMessageBtn" class="btn-primary" onclick="sendCustomMessage()" disabled>Send Message</button>
+        </div>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3>Activity Log</h3>
+            <button class="btn-secondary" onclick="clearLog()">Clear Log</button>
+        </div>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let clientId = null;
+        let currentRoom = null;
+        let connectedUsers = new Map();
+        let stats = {
+            messagesSent: 0,
+            messagesReceived: 0,
+            connectionAttempts: 0,
+            reconnectAttempts: 0
+        };
+
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateUI() {
+            // Update connection status
+            const isConnected = ws && ws.readyState === WebSocket.OPEN;
+            const statusDiv = document.getElementById('connectionStatus');
+
+            if (isConnected) {
+                statusDiv.className = 'status-card status-connected';
+                statusDiv.innerHTML = '<div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">Connected</div><div style="font-size: 14px; color: #065f46;">Real-time communication active</div>';
+            } else if (ws && ws.readyState === WebSocket.CONNECTING) {
+                statusDiv.className = 'status-card status-connecting';
+                statusDiv.innerHTML = '<div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">Connecting...</div><div style="font-size: 14px; color: #92400e;">Establishing connection</div>';
+            } else {
+                statusDiv.className = 'status-card status-disconnected';
+                statusDiv.innerHTML = '<div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">Disconnected</div><div style="font-size: 14px; color: #6b7280;">Ready to connect</div>';
+            }
+
+            // Update client info
+            document.getElementById('clientId').textContent = clientId || 'None';
+            document.getElementById('currentRoom').textContent = currentRoom || 'None';
+            document.getElementById('memberCount').textContent = connectedUsers.size;
+
+            // Update stats
+            document.getElementById('messagesSent').textContent = stats.messagesSent;
+            document.getElementById('messagesReceived').textContent = stats.messagesReceived;
+            document.getElementById('connectionAttempts').textContent = stats.connectionAttempts;
+            document.getElementById('reconnectAttempts').textContent = stats.reconnectAttempts;
+
+            // Update buttons
+            document.getElementById('connectBtn').disabled = isConnected;
+            document.getElementById('disconnectBtn').disabled = !isConnected;
+            document.getElementById('pingBtn').disabled = !isConnected;
+            document.getElementById('joinRoomBtn').disabled = !isConnected;
+            document.getElementById('leaveRoomBtn').disabled = !isConnected || !currentRoom;
+            document.getElementById('sendMessageBtn').disabled = !isConnected;
+
+            // Update users list
+            const usersContainer = document.getElementById('usersContainer');
+            const usersList = document.getElementById('usersList');
+
+            if (connectedUsers.size > 0) {
+                usersContainer.style.display = 'block';
+                usersList.innerHTML = '';
+
+                connectedUsers.forEach((user, userId) => {
+                    const userCard = document.createElement('div');
+                    userCard.className = 'user-card';
+                    userCard.innerHTML = `
+                        <div style="display: flex; align-items: center;">
+                            <div class="user-avatar" style="background-color: ${user.avatarColor || '#6b7280'};"></div>
+                            <div>
+                                <div style="font-weight: 500;">${user.displayName || user.name || 'Anonymous'}${userId === clientId ? ' (You)' : ''}</div>
+                                <div style="font-size: 11px; color: #6b7280; font-family: monospace;">${userId.slice(0, 8)}...</div>
+                            </div>
+                        </div>
+                    `;
+                    usersList.appendChild(userCard);
+                });
+            } else {
+                usersContainer.style.display = 'none';
+            }
+        }
+
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('Already connected');
+                return;
+            }
+
+            const wsUrl = 'ws://localhost:3000';
+            log(`Connecting to ${wsUrl}...`);
+            stats.connectionAttempts++;
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function () {
+                log('✅ WebSocket connection established');
+                updateUI();
+            };
+
+            ws.onmessage = function (event) {
+                try {
+                    const message = JSON.parse(event.data);
+                    stats.messagesReceived++;
+
+                    log(`📥 ${message.type}: ${JSON.stringify(message.payload || {})}`);
+
+                    switch (message.type) {
+                        case 'connection_established':
+                            clientId = message.payload.clientId;
+                            log(`🔗 Client ID assigned: ${clientId}`);
+                            break;
+
+                        case 'room_joined':
+                            currentRoom = message.payload.roomId;
+                            log(`🏠 Joined room: ${currentRoom}`);
+
+                            // Add room members to connected users
+                            if (message.payload.roomMembers) {
+                                message.payload.roomMembers.forEach(member => {
+                                    connectedUsers.set(member.clientId, {
+                                        ...member.user,
+                                        clientId: member.clientId
+                                    });
+                                });
+                            }
+                            break;
+
+                        case 'room_left':
+                            currentRoom = null;
+                            connectedUsers.clear();
+                            log('🚪 Left room');
+                            break;
+
+                        case 'user_joined':
+                            connectedUsers.set(message.payload.userId, {
+                                ...message.payload.userInfo,
+                                clientId: message.payload.userId
+                            });
+                            log(`👋 User joined: ${message.payload.userInfo?.displayName || message.payload.userId}`);
+                            break;
+
+                        case 'user_left':
+                            connectedUsers.delete(message.payload.userId);
+                            log(`👋 User left: ${message.payload.userInfo?.displayName || message.payload.userId}`);
+                            break;
+
+                        case 'error':
+                            log(`❌ Server error: ${message.payload.error}`);
+                            break;
+                    }
+
+                    updateUI();
+                } catch (error) {
+                    log(`❌ Error parsing message: ${error.message}`);
+                }
+            };
+
+            ws.onclose = function (event) {
+                log(`🔌 Connection closed (${event.code}: ${event.reason})`);
+                clientId = null;
+                currentRoom = null;
+                connectedUsers.clear();
+                updateUI();
+            };
+
+            ws.onerror = function (error) {
+                log(`❌ WebSocket error: ${error}`);
+                updateUI();
+            };
+
+            updateUI();
+        }
+
+        function disconnect() {
+            if (ws) {
+                log('🔌 Disconnecting...');
+                ws.close(1000, 'Manual disconnect');
+            }
+        }
+
+        function reconnect() {
+            log('🔄 Reconnecting...');
+            stats.reconnectAttempts++;
+            disconnect();
+            setTimeout(connect, 1000);
+        }
+
+        function sendMessage(type, payload = {}) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const message = {
+                    type,
+                    payload,
+                    timestamp: Date.now()
+                };
+                ws.send(JSON.stringify(message));
+                stats.messagesSent++;
+                log(`📤 ${type}: ${JSON.stringify(payload)}`);
+                updateUI();
+                return true;
+            } else {
+                log('❌ Cannot send message: not connected');
+                return false;
+            }
+        }
+
+        function sendPing() {
+            sendMessage('ping');
+        }
+
+        function generateRoom() {
+            const roomId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            document.getElementById('roomInput').value = roomId;
+            log(`Generated room ID: ${roomId}`);
+        }
+
+        function joinRoom() {
+            const roomId = document.getElementById('roomInput').value.trim();
+            if (!roomId) {
+                log('❌ Please enter a room ID');
+                return;
+            }
+
+            sendMessage('join_room', {
+                roomId: roomId,
+                userInfo: {
+                    uid: 'test-user-' + Date.now(),
+                    email: 'test@example.com',
+                    name: 'Test User',
+                    displayName: 'Test User',
+                    avatarColor: '#' + Math.floor(Math.random() * 16777215).toString(16),
+                    picture: null
+                }
+            });
+        }
+
+        function leaveRoom() {
+            sendMessage('leave_room', {});
+        }
+
+        function sendCustomMessage() {
+            const message = document.getElementById('messageInput').value.trim();
+            if (!message) {
+                log('❌ Please enter a message');
+                return;
+            }
+
+            if (sendMessage('custom_message', { text: message })) {
+                document.getElementById('messageInput').value = '';
+            }
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        // Enter key handlers
+        document.getElementById('messageInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                sendCustomMessage();
+            }
+        });
+
+        document.getElementById('roomInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                joinRoom();
+            }
+        });
+
+        // Initialize UI
+        updateUI();
+        log('🚀 Connection State Management Test loaded');
+        log('💡 Click "Connect" to start testing the WebSocket connection');
+
+        // Auto-connect after a short delay
+        setTimeout(() => {
+            log('🤖 Auto-connecting in 2 seconds...');
+            setTimeout(connect, 2000);
+        }, 1000);
+    </script>
+</body>
+
+</html>
