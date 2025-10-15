@@ -381,7 +381,6 @@ class ConnectionService {
 // Create singleton instance
 const connectionService = new ConnectionService();
 
-// Export service instance and interface
+// Export service instance and class type
 export default connectionService;
-export type { ConnectionService };
 export { ConnectionService };

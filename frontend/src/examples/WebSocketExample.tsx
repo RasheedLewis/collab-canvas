@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import API from '../lib/api';
-import type { WebSocketMessage } from '../types/websocket';
 
 /**
  * Example component demonstrating WebSocket hook usage

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useConnection } from '../hooks/useConnection';
 import API from '../lib/api';
 

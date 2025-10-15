@@ -2,10 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector, devtools } from 'zustand/middleware';
 import type {
     WebSocketConnectionState,
-    WebSocketUser,
-    UserJoinedPayload,
-    UserLeftPayload,
-    ErrorPayload
+    WebSocketUser
 } from '../types/websocket';
 import API from '../lib/api';
 
@@ -313,7 +310,5 @@ export const useRoomInfo = () => {
     };
 };
 
-// Export store instance
-export { useConnectionStore };
-
+// Store is already exported above
 export default useConnectionStore;

@@ -18,7 +18,7 @@ const GridBackground: React.FC<GridBackgroundProps> = ({
   stageY = 0,
   scale = 1
 }) => {
-  const lines: JSX.Element[] = [];
+  const lines: React.ReactElement[] = [];
 
   // Calculate visible area considering stage position and scale
   const startX = Math.floor((-stageX) / scale / gridSize) * gridSize;

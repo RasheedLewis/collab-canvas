@@ -192,7 +192,7 @@ export interface WebSocketHookReturn {
     authenticate: (token: string, userInfo?: WebSocketUser) => void;
 
     // Message sending
-    sendMessage: (message: WebSocketMessage) => void;
+    sendMessage: (message: WebSocketMessage) => boolean;
     sendPing: () => void;
 
     // Event listeners

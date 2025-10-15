@@ -51,9 +51,10 @@ export const useCanvasStore = create<CanvasStore>()(
 
             updateObject: (id, updates) =>
                 set((state) => ({
+                    ...state,
                     objects: state.objects.map((obj) =>
                         obj.id === id
-                            ? { ...obj, ...updates, updatedAt: Date.now() }
+                            ? { ...obj, ...updates, updatedAt: Date.now() } as CanvasObject
                             : obj
                     ),
                 }), false, 'updateObject'),

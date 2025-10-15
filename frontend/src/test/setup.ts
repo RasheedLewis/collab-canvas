@@ -9,7 +9,7 @@ vi.mock('firebase/auth', () => ({
     createUserWithEmailAndPassword: vi.fn(),
     signOut: vi.fn(),
     updateProfile: vi.fn(),
-    onAuthStateChanged: vi.fn((callback) => {
+    onAuthStateChanged: vi.fn((_callback) => {
         // Return a mock unsubscribe function
         return vi.fn();
     }),

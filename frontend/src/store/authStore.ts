@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { persist } from 'zustand/middleware';
 import type { User } from 'firebase/auth';
-import authService, { UserProfile } from '../services/authService';
+import authService, { type UserProfile } from '../services/authService';
 
 // Auth store state interface
 interface AuthState {
@@ -29,7 +29,7 @@ interface AuthState {
 
     // Utility actions
     clearError: () => void;
-    initialize: () => Promise<void>;
+    initialize: () => Promise<void | (() => void)>;
     refreshUserProfile: () => Promise<void>;
 }
 

@@ -5,7 +5,7 @@
  * state management as an alternative to React Context.
  */
 
-import React from 'react';
+// Removed unused React import due to new JSX transform
 import { useAuthZustand, useAuthStatus, useUserProfile, useIsAuthenticated } from '../hooks/useAuthZustand';
 import { useAuthStore } from '../store/authStore';
 
