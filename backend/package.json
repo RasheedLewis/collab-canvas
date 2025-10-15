@@ -11,7 +11,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "watch": "tsc --watch",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "accepts": "^2.0.0",
@@ -117,7 +119,6 @@
     "undefsafe": "^2.0.5",
     "undici-types": "^7.14.0",
     "unpipe": "^1.0.0",
-    "uuid": "^13.0.0",
     "v8-compile-cache-lib": "^3.0.1",
     "vary": "^1.1.2",
     "wrappy": "^1.0.2",
@@ -128,8 +129,13 @@
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^22.10.2",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
-    "firebase-admin": "^13.5.0"
+    "firebase-admin": "^13.5.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "uuid": "^8.3.2"
   }
 }
