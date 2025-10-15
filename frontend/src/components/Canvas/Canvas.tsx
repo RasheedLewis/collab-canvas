@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Stage, Layer, Rect, Circle, Text } from 'react-konva';
+import { Stage, Layer, Rect, Circle, Text, Line } from 'react-konva';
 import Konva from 'konva';
 import GridBackground from './GridBackground';
 import CanvasRectangle from './CanvasRectangle';
@@ -99,18 +99,56 @@ const Canvas: React.FC<CanvasProps> = ({
     }
   }, [isConnected, ws]);
 
+  // Color palette for user cursors (vibrant, distinct colors)
+  const cursorColors = [
+    '#FF6B6B', // Coral Red
+    '#4ECDC4', // Teal
+    '#45B7D1', // Sky Blue  
+    '#96CEB4', // Mint Green
+    '#FECA57', // Golden Yellow
+    '#FF9FF3', // Pink
+    '#54A0FF', // Royal Blue
+    '#5F27CD', // Purple
+    '#00D2D3', // Cyan
+    '#FF9F43', // Orange
+    '#10AC84', // Green
+    '#EE5A24', // Red Orange
+    '#0984e3', // Blue
+    '#6c5ce7', // Lavender
+    '#fd79a8', // Rose
+    '#fdcb6e', // Peach
+  ];
+
+  // Generate consistent color based on client ID
+  const getColorForUser = (userId: string): string => {
+    if (!userId) return cursorColors[0];
+    
+    // Create a simple hash from the user ID
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) {
+      const char = userId.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    
+    // Use the hash to pick a color from our palette
+    const colorIndex = Math.abs(hash) % cursorColors.length;
+    return cursorColors[colorIndex];
+  };
+
   // Join a test room when connected
   useEffect(() => {
     if (isConnected && !roomId) {
       // Join a test room with user info
       const testRoomId = 'canvas-room-1';
+      const randomId = Math.random().toString(36).substring(2, 8);
       const userInfo = {
         uid: clientId || 'anonymous',
         email: null,
-        name: `User_${Math.random().toString(36).substring(2, 8)}`,
+        name: `User_${randomId}`,
         picture: null,
-        displayName: `User_${Math.random().toString(36).substring(2, 8)}`,
-        avatarColor: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`
+        displayName: `User_${randomId}`,
+        avatarColor: getColorForUser(clientId || randomId)
       };
       
       joinRoom(testRoomId, userInfo);
@@ -208,7 +246,8 @@ const Canvas: React.FC<CanvasProps> = ({
                       distance >= API.config.CURSOR_CONFIG.maxDistance;
 
     if (shouldSend && isConnected && roomId) {
-      const message = API.messages.cursorMoved(x, y, roomId);
+      // Use cursorUpdate to include tool information
+      const message = API.messages.cursorUpdate(x, y, roomId, undefined, tool);
       sendMessage(message);
       lastCursorUpdateRef.current = now;
       lastCursorPositionRef.current = { x, y };
@@ -222,7 +261,8 @@ const Canvas: React.FC<CanvasProps> = ({
       if (remainingTime > 0) {
         cursorThrottleTimeoutRef.current = setTimeout(() => {
           if (isConnected && roomId) {
-            const message = API.messages.cursorMoved(x, y, roomId);
+            // Use cursorUpdate to include tool information
+            const message = API.messages.cursorUpdate(x, y, roomId, undefined, tool);
             sendMessage(message);
             lastCursorUpdateRef.current = Date.now();
             lastCursorPositionRef.current = { x, y };
@@ -230,7 +270,7 @@ const Canvas: React.FC<CanvasProps> = ({
         }, remainingTime);
       }
     }
-  }, [isConnected, roomId, sendMessage]);
+  }, [isConnected, roomId, sendMessage, tool]);
 
   // WebSocket event listeners for cursor synchronization
   useEffect(() => {
@@ -660,52 +700,130 @@ const Canvas: React.FC<CanvasProps> = ({
 
           {/* Other users' cursors */}
           {Array.from(otherCursors.values()).map((cursor) => {
-            const userColor = cursor.userInfo?.avatarColor || '#3b82f6';
+            const userColor = cursor.userInfo?.avatarColor || getColorForUser(cursor.userId);
             const userName = cursor.userInfo?.displayName || 
                            (cursor.userInfo?.name ?? 'Anonymous');
+            const activeTool = cursor.activeTool || 'select';
+            
+            // Add tool emoji for better UX
+            const toolEmoji = {
+              'select': '👆',
+              'rectangle': '▭',
+              'circle': '⭕',
+              'text': 'T'
+            }[activeTool] || '👆';
+            
+            const displayText = `${toolEmoji} ${userName}`;
+            
+            // Calculate label dimensions
+            const labelPadding = 8;
+            const labelHeight = 28;
+            const estimatedTextWidth = displayText.length * 7 + labelPadding * 2;
             
             return (
               <React.Fragment key={cursor.userId}>
-                {/* Cursor pointer */}
-                <Circle
-                  x={cursor.x}
-                  y={cursor.y}
-                  radius={8}
-                  fill={userColor}
-                  stroke="white"
-                  strokeWidth={2}
+                {/* Cursor shadow (for depth) */}
+                <Line
+                  points={[
+                    cursor.x + 2, cursor.y + 2,      // Top point (shadow)
+                    cursor.x + 2, cursor.y + 18,     // Bottom left (shadow)
+                    cursor.x + 7, cursor.y + 14,     // Bottom indent (shadow)
+                    cursor.x + 12, cursor.y + 20,    // Bottom right tip (shadow)
+                    cursor.x + 8, cursor.y + 12,     // Right indent (shadow)
+                    cursor.x + 16, cursor.y + 10,    // Right point (shadow)
+                    cursor.x + 2, cursor.y + 2       // Back to top (shadow)
+                  ]}
+                  fill="rgba(0,0,0,0.3)"
+                  closed={true}
                   listening={false}
                 />
                 
-                {/* Cursor arrow/triangle */}
-                <Circle
-                  x={cursor.x}
-                  y={cursor.y}
-                  radius={3}
-                  fill="white"
+                {/* Main cursor arrow */}
+                <Line
+                  points={[
+                    cursor.x, cursor.y,          // Top point
+                    cursor.x, cursor.y + 16,     // Bottom left
+                    cursor.x + 5, cursor.y + 12, // Bottom indent
+                    cursor.x + 10, cursor.y + 18, // Bottom right tip
+                    cursor.x + 6, cursor.y + 10,  // Right indent
+                    cursor.x + 14, cursor.y + 8,  // Right point
+                    cursor.x, cursor.y           // Back to top
+                  ]}
+                  fill={userColor}
+                  stroke="white"
+                  strokeWidth={1}
+                  closed={true}
                   listening={false}
                 />
 
-                {/* User name label background */}
+                {/* Inner arrow detail */}
+                <Line
+                  points={[
+                    cursor.x + 2, cursor.y + 2,      // Inner top
+                    cursor.x + 2, cursor.y + 12,     // Inner left
+                    cursor.x + 6, cursor.y + 10,     // Inner indent
+                    cursor.x + 10, cursor.y + 6,     // Inner right
+                    cursor.x + 2, cursor.y + 2       // Back to inner top
+                  ]}
+                  fill="rgba(255,255,255,0.3)"
+                  closed={true}
+                  listening={false}
+                />
+
+                {/* Name label drop shadow */}
                 <Rect
-                  x={cursor.x + 12}
-                  y={cursor.y - 10}
-                  width={userName.length * 8 + 16} // Approximate width based on text length
-                  height={20}
+                  x={cursor.x + 20 + 2}
+                  y={cursor.y + 2 + 2}
+                  width={estimatedTextWidth}
+                  height={labelHeight}
+                  fill="rgba(0,0,0,0.2)"
+                  cornerRadius={6}
+                  listening={false}
+                />
+                
+                {/* Name label background */}
+                <Rect
+                  x={cursor.x + 20}
+                  y={cursor.y + 2}
+                  width={estimatedTextWidth}
+                  height={labelHeight}
                   fill={userColor}
-                  cornerRadius={4}
-                  opacity={0.9}
+                  cornerRadius={6}
+                  listening={false}
+                />
+
+                {/* Name label border/highlight */}
+                <Rect
+                  x={cursor.x + 20}
+                  y={cursor.y + 2}
+                  width={estimatedTextWidth}
+                  height={labelHeight}
+                  stroke="rgba(255,255,255,0.4)"
+                  strokeWidth={1}
+                  cornerRadius={6}
                   listening={false}
                 />
                 
                 {/* User name text */}
                 <Text
-                  x={cursor.x + 20}
-                  y={cursor.y - 5}
-                  text={userName}
+                  x={cursor.x + 20 + labelPadding}
+                  y={cursor.y + 2 + (labelHeight - 12) / 2} // Vertically center the text
+                  text={displayText}
                   fontSize={12}
-                  fontFamily="Arial, sans-serif"
+                  fontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                  fontStyle="500" // Medium weight
                   fill="white"
+                  listening={false}
+                />
+
+                {/* User status indicator (small dot) */}
+                <Circle
+                  x={cursor.x + 24}
+                  y={cursor.y + 8}
+                  radius={3}
+                  fill="#00ff88"
+                  stroke="white"
+                  strokeWidth={1}
                   listening={false}
                 />
               </React.Fragment>
