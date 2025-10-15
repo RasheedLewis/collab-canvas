@@ -15,7 +15,8 @@ import type {
     ErrorPayload,
     ConnectionEstablishedPayload,
     RoomJoinedPayload,
-    AuthSuccessPayload
+    AuthSuccessPayload,
+    ReconnectSuccessPayload
 } from '../types/websocket';
 
 // Default configuration
@@ -38,6 +39,8 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
     const [lastError, setLastError] = useState<string | null>(null);
     const [reconnectAttempts, setReconnectAttempts] = useState(0);
     const [serverTime, setServerTime] = useState<number | null>(null);
+    const [reconnectToken, setReconnectToken] = useState<string | null>(null);
+    const [sessionId, setSessionId] = useState<string | null>(null);
 
     // WebSocket instance and references
     const wsRef = useRef<WebSocket | null>(null);
@@ -114,6 +117,9 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
                     const payload = message.payload as ConnectionEstablishedPayload;
                     setClientId(payload.clientId);
                     setServerTime(payload.serverTime);
+                    if (payload.reconnectToken) {
+                        setReconnectToken(payload.reconnectToken);
+                    }
                     updateConnectionState('connected');
                     startHeartbeat();
                     console.log(`🔗 WebSocket connected. Client ID: ${payload.clientId}`);
@@ -150,6 +156,18 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
                 case 'auth_success': {
                     const payload = message.payload as AuthSuccessPayload;
                     console.log(`🔐 Authentication successful for: ${payload.user?.email || 'unknown'}`);
+                    break;
+                }
+
+                case 'reconnect_success': {
+                    const payload = message.payload as ReconnectSuccessPayload;
+                    setSessionId(payload.sessionId);
+                    setReconnectToken(payload.newReconnectToken);
+                    if (payload.roomId) {
+                        setRoomId(payload.roomId);
+                    }
+                    setReconnectAttempts(payload.reconnectAttempts);
+                    console.log(`🔄 Reconnection successful. Session: ${payload.sessionId}`);
                     break;
                 }
 
@@ -204,7 +222,12 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
 
                 reconnectTimeoutRef.current = setTimeout(() => {
                     console.log(`🔄 Reconnection attempt ${reconnectAttempts + 1}/${fullConfig.maxReconnectAttempts}`);
-                    connect();
+                    // Use reconnect method if we have a token, otherwise regular connect
+                    if (reconnectToken) {
+                        reconnect(reconnectToken);
+                    } else {
+                        connect();
+                    }
                 }, fullConfig.reconnectInterval);
             } else {
                 setLastError('Maximum reconnection attempts reached');
@@ -287,7 +310,74 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         setClientId(null);
         setRoomId(null);
         setReconnectAttempts(0);
-    }, [clearTimeouts]);
+        setReconnectToken(null);
+        setSessionId(null);
+        updateConnectionState('disconnected');
+    }, [clearTimeouts, updateConnectionState]);
+
+    // Reconnect with optional token
+    const reconnect = useCallback((providedToken?: string) => {
+        const tokenToUse = providedToken || reconnectToken;
+
+        if (!tokenToUse) {
+            console.log('🔄 No reconnect token available, performing regular connection...');
+            connect();
+            return;
+        }
+
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            console.log('WebSocket already connected');
+            return;
+        }
+
+        if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+            console.log('WebSocket connection in progress');
+            return;
+        }
+
+        try {
+            console.log(`🔄 Reconnecting to WebSocket with token: ${tokenToUse.substring(0, 8)}...`);
+            updateConnectionState('reconnecting');
+
+            wsRef.current = new WebSocket(fullConfig.url, fullConfig.protocols);
+
+            // Set up event handlers
+            wsRef.current.onopen = () => {
+                console.log('🔄 WebSocket reconnection established, sending reconnect message...');
+
+                // Send reconnect message with token
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({
+                        type: 'reconnect',
+                        payload: {
+                            reconnectToken: tokenToUse,
+                            lastSessionId: sessionId
+                        },
+                        timestamp: Date.now()
+                    }));
+                }
+            };
+
+            wsRef.current.onmessage = (event) => {
+                handleMessage(event);
+            };
+
+            wsRef.current.onclose = (event) => {
+                handleClose(event);
+            };
+
+            wsRef.current.onerror = (error) => {
+                console.error('❌ WebSocket reconnection error:', error);
+                setLastError('Reconnection failed');
+                updateConnectionState('error');
+            };
+
+        } catch (error) {
+            console.error('❌ Failed to create WebSocket reconnection:', error);
+            setLastError('Failed to reconnect');
+            updateConnectionState('error');
+        }
+    }, [reconnectToken, sessionId, fullConfig.url, fullConfig.protocols, connect, updateConnectionState, handleMessage, handleClose]);
 
     // Room management functions
     const joinRoom = useCallback((roomId: string, userInfo?: WebSocketUser) => {
@@ -363,6 +453,7 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         // Connection methods
         connect,
         disconnect,
+        reconnect,
 
         // Room management
         joinRoom,
@@ -385,6 +476,8 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         // Connection info
         lastError,
         reconnectAttempts,
-        serverTime
+        serverTime,
+        reconnectToken,
+        sessionId
     };
 }

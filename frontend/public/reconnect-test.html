@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Disconnect/Reconnect Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8fafc;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .status {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            display: inline-block;
+            margin-bottom: 16px;
+        }
+
+        .status.connected {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status.connecting {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status.reconnecting {
+            background: #fed7aa;
+            color: #9a3412;
+        }
+
+        .status.disconnected {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status.error {
+            background: #fecaca;
+            color: #991b1b;
+        }
+
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 4px;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #2563eb;
+        }
+
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .danger {
+            background: #ef4444;
+        }
+
+        .danger:hover {
+            background: #dc2626;
+        }
+
+        .warning {
+            background: #f59e0b;
+        }
+
+        .warning:hover {
+            background: #d97706;
+        }
+
+        .info {
+            background: #10b981;
+        }
+
+        .info:hover {
+            background: #059669;
+        }
+
+        .logs {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 16px;
+            border-radius: 8px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .test-section {
+            margin-bottom: 24px;
+        }
+
+        .test-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #374151;
+        }
+
+        input[type="text"] {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            margin: 4px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔄 WebSocket Disconnect/Reconnect Test</h1>
+        <p>Test the enhanced disconnect/reconnect functionality with session management and reconnection tokens.</p>
+    </div>
+
+    <div class="container">
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">Connection Status</div>
+                <div class="stat-value">
+                    <span id="connectionStatus" class="status disconnected">Disconnected</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Client ID</div>
+                <div class="stat-value" id="clientId">None</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Session ID</div>
+                <div class="stat-value" id="sessionId">None</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Reconnect Attempts</div>
+                <div class="stat-value" id="reconnectAttempts">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Reconnect Token</div>
+                <div class="stat-value" id="reconnectToken">None</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Current Room</div>
+                <div class="stat-value" id="currentRoom">None</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="container">
+            <div class="test-section">
+                <div class="test-title">Connection Controls</div>
+                <button id="connectBtn" onclick="connect()">Connect</button>
+                <button id="disconnectBtn" onclick="disconnect()">Disconnect</button>
+                <button id="reconnectBtn" onclick="reconnect()" class="warning">Reconnect with Token</button>
+                <button onclick="forceReconnect()" class="info">Force Regular Reconnect</button>
+            </div>
+
+            <div class="test-section">
+                <div class="test-title">Room Management</div>
+                <input type="text" id="roomInput" placeholder="Room ID (e.g., test-room)" value="disconnect-test-room">
+                <button onclick="joinRoom()" class="info">Join Room</button>
+                <button onclick="leaveRoom()" class="warning">Leave Room</button>
+            </div>
+
+            <div class="test-section">
+                <div class="test-title">Test Scenarios</div>
+                <button onclick="testNormalDisconnect()" class="warning">Test Normal Disconnect</button>
+                <button onclick="testUnexpectedDisconnect()" class="danger">Test Unexpected Disconnect</button>
+                <button onclick="testReconnectAfterDisconnect()" class="info">Test Reconnect Flow</button>
+                <button onclick="clearLogs()">Clear Logs</button>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="test-title">Real-time Logs</div>
+            <div id="logs" class="logs"></div>
+        </div>
+    </div>
+
+    <script>
+        const WS_URL = 'ws://localhost:3000';
+        let ws = null;
+        let clientId = null;
+        let sessionId = null;
+        let reconnectToken = null;
+        let currentRoom = null;
+        let reconnectAttempts = 0;
+
+        // Logging
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                info: '#60a5fa',
+                success: '#34d399',
+                warning: '#fbbf24',
+                error: '#f87171',
+                reconnect: '#a78bfa'
+            };
+
+            const logsElement = document.getElementById('logs');
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<span style="color: #9ca3af">[${timestamp}]</span> <span style="color: ${colors[type] || colors.info}">${message}</span>`;
+            logsElement.appendChild(logEntry);
+            logsElement.scrollTop = logsElement.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        // UI Updates
+        function updateUI() {
+            document.getElementById('clientId').textContent = clientId || 'None';
+            document.getElementById('sessionId').textContent = sessionId || 'None';
+            document.getElementById('reconnectAttempts').textContent = reconnectAttempts;
+            document.getElementById('reconnectToken').textContent = reconnectToken ?
+                reconnectToken.substring(0, 8) + '...' : 'None';
+            document.getElementById('currentRoom').textContent = currentRoom || 'None';
+
+            const statusElement = document.getElementById('connectionStatus');
+            if (ws) {
+                switch (ws.readyState) {
+                    case WebSocket.CONNECTING:
+                        statusElement.textContent = 'Connecting';
+                        statusElement.className = 'status connecting';
+                        break;
+                    case WebSocket.OPEN:
+                        statusElement.textContent = 'Connected';
+                        statusElement.className = 'status connected';
+                        break;
+                    case WebSocket.CLOSING:
+                        statusElement.textContent = 'Disconnecting';
+                        statusElement.className = 'status reconnecting';
+                        break;
+                    case WebSocket.CLOSED:
+                        statusElement.textContent = 'Disconnected';
+                        statusElement.className = 'status disconnected';
+                        break;
+                }
+            } else {
+                statusElement.textContent = 'Disconnected';
+                statusElement.className = 'status disconnected';
+            }
+        }
+
+        // WebSocket Functions
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('Already connected', 'warning');
+                return;
+            }
+
+            log('🔗 Connecting to WebSocket server...', 'info');
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                log('✅ WebSocket connection established', 'success');
+                updateUI();
+            };
+
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                handleMessage(message);
+            };
+
+            ws.onclose = (event) => {
+                log(`🔌 WebSocket closed. Code: ${event.code}, Reason: ${event.reason}`, 'warning');
+                updateUI();
+            };
+
+            ws.onerror = (error) => {
+                log('❌ WebSocket error occurred', 'error');
+                console.error('WebSocket error:', error);
+                updateUI();
+            };
+
+            updateUI();
+        }
+
+        function disconnect() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected', 'warning');
+                return;
+            }
+
+            log('🔌 Disconnecting from WebSocket server...', 'info');
+            ws.close(1000, 'Client disconnect');
+            ws = null;
+            updateUI();
+        }
+
+        function reconnect() {
+            if (!reconnectToken) {
+                log('❌ No reconnect token available, performing regular connection', 'error');
+                connect();
+                return;
+            }
+
+            log(`🔄 Reconnecting with token: ${reconnectToken.substring(0, 8)}...`, 'reconnect');
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                log('🔄 WebSocket reconnection established, sending reconnect message...', 'reconnect');
+
+                const reconnectMessage = {
+                    type: 'reconnect',
+                    payload: {
+                        reconnectToken: reconnectToken,
+                        lastSessionId: sessionId
+                    },
+                    timestamp: Date.now()
+                };
+
+                ws.send(JSON.stringify(reconnectMessage));
+                updateUI();
+            };
+
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                handleMessage(message);
+            };
+
+            ws.onclose = (event) => {
+                log(`🔌 WebSocket reconnection closed. Code: ${event.code}, Reason: ${event.reason}`, 'warning');
+                updateUI();
+            };
+
+            ws.onerror = (error) => {
+                log('❌ WebSocket reconnection error occurred', 'error');
+                console.error('WebSocket reconnection error:', error);
+                updateUI();
+            };
+
+            updateUI();
+        }
+
+        function forceReconnect() {
+            log('🔄 Forcing regular reconnection (ignoring token)...', 'info');
+            connect();
+        }
+
+        // Message handling
+        function handleMessage(message) {
+            log(`📨 Received: ${message.type}`, 'info');
+
+            switch (message.type) {
+                case 'connection_established':
+                    clientId = message.payload.clientId;
+                    if (message.payload.reconnectToken) {
+                        reconnectToken = message.payload.reconnectToken;
+                        log(`🎫 Received reconnect token: ${reconnectToken.substring(0, 8)}...`, 'success');
+                    }
+                    log(`🆔 Client ID assigned: ${clientId}`, 'success');
+                    break;
+
+                case 'reconnect_success':
+                    sessionId = message.payload.sessionId;
+                    reconnectToken = message.payload.newReconnectToken;
+                    reconnectAttempts = message.payload.reconnectAttempts;
+                    if (message.payload.roomId) {
+                        currentRoom = message.payload.roomId;
+                        log(`🏠 Restored to room: ${currentRoom}`, 'success');
+                    }
+                    log(`✅ Reconnection successful! Session: ${sessionId}`, 'success');
+                    break;
+
+                case 'room_joined':
+                    currentRoom = message.payload.roomId;
+                    log(`🏠 Joined room: ${currentRoom}`, 'success');
+                    break;
+
+                case 'room_left':
+                    log(`🚪 Left room: ${currentRoom}`, 'info');
+                    currentRoom = null;
+                    break;
+
+                case 'error':
+                    log(`❌ Error: ${message.payload.error} (${message.payload.code || 'no code'})`, 'error');
+                    break;
+
+                case 'user_joined':
+                    log(`👋 User joined room ${message.payload.roomId}: ${message.payload.userInfo?.name || message.payload.userId}`, 'info');
+                    break;
+
+                case 'user_left':
+                    log(`👋 User left room ${message.payload.roomId}: ${message.payload.userInfo?.name || message.payload.userId}`, 'info');
+                    break;
+
+                default:
+                    log(`📋 Message: ${JSON.stringify(message)}`, 'info');
+            }
+
+            updateUI();
+        }
+
+        // Room management
+        function joinRoom() {
+            const roomId = document.getElementById('roomInput').value.trim();
+            if (!roomId) {
+                log('❌ Please enter a room ID', 'error');
+                return;
+            }
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('❌ Not connected to WebSocket', 'error');
+                return;
+            }
+
+            const message = {
+                type: 'join_room',
+                payload: {
+                    roomId: roomId,
+                    userInfo: {
+                        uid: `test-user-${clientId}`,
+                        email: 'test@example.com',
+                        name: `Test User ${clientId?.substring(0, 8)}`,
+                        picture: null,
+                        displayName: `Tester ${clientId?.substring(0, 4)}`,
+                        avatarColor: '#3b82f6'
+                    }
+                },
+                timestamp: Date.now()
+            };
+
+            ws.send(JSON.stringify(message));
+            log(`🏠 Joining room: ${roomId}`, 'info');
+        }
+
+        function leaveRoom() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('❌ Not connected to WebSocket', 'error');
+                return;
+            }
+
+            const message = {
+                type: 'leave_room',
+                payload: {
+                    roomId: currentRoom
+                },
+                timestamp: Date.now()
+            };
+
+            ws.send(JSON.stringify(message));
+            log(`🚪 Leaving room: ${currentRoom || 'current'}`, 'info');
+        }
+
+        // Test scenarios
+        function testNormalDisconnect() {
+            log('🧪 Testing normal disconnect scenario...', 'info');
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close(1000, 'Normal test disconnect');
+            }
+        }
+
+        function testUnexpectedDisconnect() {
+            log('🧪 Testing unexpected disconnect scenario...', 'warning');
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close(1006, 'Unexpected test disconnect');
+            }
+        }
+
+        function testReconnectFlow() {
+            log('🧪 Testing full reconnect flow...', 'info');
+            log('1. Disconnecting...', 'info');
+            testUnexpectedDisconnect();
+
+            setTimeout(() => {
+                log('2. Attempting reconnection with token...', 'reconnect');
+                reconnect();
+            }, 2000);
+        }
+
+        // Initialize
+        log('💻 WebSocket Disconnect/Reconnect Test initialized', 'info');
+        log('🔧 Click "Connect" to establish initial connection', 'info');
+        updateUI();
+    </script>
+</body>
+
+</html>

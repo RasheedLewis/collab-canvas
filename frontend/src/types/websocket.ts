@@ -29,6 +29,8 @@ export interface ConnectionEstablishedPayload {
     clientId: string;
     serverTime: number;
     connectedClients: number;
+    protocolVersion: string;
+    reconnectToken?: string;
 }
 
 export interface RoomJoinedPayload {
@@ -62,6 +64,16 @@ export interface AuthSuccessPayload {
 export interface ErrorPayload {
     error: string;
     code?: string;
+    details?: Record<string, any>;
+}
+
+export interface ReconnectSuccessPayload {
+    sessionRecovered: boolean;
+    roomId?: string;
+    userInfo?: WebSocketUser;
+    sessionId: string;
+    reconnectAttempts: number;
+    newReconnectToken: string;
 }
 
 // Message type definitions with their payloads
@@ -100,6 +112,14 @@ export interface HeartbeatMessage extends WebSocketMessage {
     type: 'heartbeat';
 }
 
+export interface ReconnectMessage extends WebSocketMessage {
+    type: 'reconnect';
+    payload: {
+        reconnectToken: string;
+        lastSessionId?: string;
+    };
+}
+
 export interface ConnectionEstablishedMessage extends WebSocketMessage {
     type: 'connection_established';
     payload: ConnectionEstablishedPayload;
@@ -130,6 +150,11 @@ export interface ErrorMessage extends WebSocketMessage {
     payload: ErrorPayload;
 }
 
+export interface ReconnectSuccessMessage extends WebSocketMessage {
+    type: 'reconnect_success';
+    payload: ReconnectSuccessPayload;
+}
+
 export interface ServerShutdownMessage extends WebSocketMessage {
     type: 'server_shutdown';
     payload: {
@@ -157,6 +182,7 @@ export interface WebSocketHookReturn {
     // Connection methods
     connect: () => void;
     disconnect: () => void;
+    reconnect: (reconnectToken?: string) => void;
 
     // Room management
     joinRoom: (roomId: string, userInfo?: WebSocketUser) => void;
@@ -180,6 +206,8 @@ export interface WebSocketHookReturn {
     lastError: string | null;
     reconnectAttempts: number;
     serverTime: number | null;
+    reconnectToken: string | null;
+    sessionId: string | null;
 }
 
 // Event callback types

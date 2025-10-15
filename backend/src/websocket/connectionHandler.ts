@@ -9,6 +9,7 @@ import {
     PROTOCOL_VERSION,
     SUPPORTED_MESSAGE_TYPES
 } from './messageProtocol';
+import SessionManager, { type ClientSession } from './sessionManager';
 
 export interface Client {
     id: string;
@@ -16,6 +17,7 @@ export interface Client {
     isAlive: boolean;
     joinedAt: Date;
     roomId?: string;
+    session?: ClientSession;
     user?: {
         uid: string;
         email: string | null;
@@ -40,11 +42,13 @@ export class WebSocketConnectionManager {
     private heartbeatInterval: NodeJS.Timeout | null = null;
     private messageRouter: MessageRouter;
     private rateLimiter: RateLimiter;
+    private sessionManager: SessionManager;
 
     constructor(server: Server) {
         this.wss = new WebSocketServer({ server });
         this.messageRouter = new MessageRouter();
         this.rateLimiter = new RateLimiter(100, 60000); // 100 messages per minute
+        this.sessionManager = new SessionManager();
         this.initialize();
         this.setupMessageHandlers();
         this.startHeartbeat();
@@ -67,6 +71,7 @@ export class WebSocketConnectionManager {
         this.messageRouter.registerHandler('leave_room', this.handleLeaveRoom.bind(this));
         this.messageRouter.registerHandler('auth', this.handleAuthentication.bind(this));
         this.messageRouter.registerHandler('heartbeat', this.handleHeartbeat.bind(this));
+        this.messageRouter.registerHandler('reconnect', this.handleReconnect.bind(this));
 
         console.log(`✅ Registered handlers for: ${this.messageRouter.getRegisteredTypes().join(', ')}`);
     }
@@ -80,17 +85,22 @@ export class WebSocketConnectionManager {
             joinedAt: new Date()
         };
 
+        // Create session for disconnect/reconnect management
+        const session = this.sessionManager.createSession(clientId);
+        client.session = session;
+
         this.clients.set(clientId, client);
         console.log(`✅ Client connected: ${clientId}. Total clients: ${this.clients.size}`);
 
-        // Send welcome message to new client with protocol version
+        // Send welcome message to new client with protocol version and reconnect token
         this.sendToClient(clientId, {
             type: 'connection_established',
             payload: {
                 clientId,
                 serverTime: Date.now(),
                 connectedClients: this.clients.size,
-                protocolVersion: PROTOCOL_VERSION
+                protocolVersion: PROTOCOL_VERSION,
+                reconnectToken: session.reconnectToken
             },
             timestamp: Date.now()
         });
@@ -137,13 +147,13 @@ export class WebSocketConnectionManager {
         // Handle client disconnect
         ws.on('close', (code: number, reason: Buffer) => {
             console.log(`🔌 Client disconnected: ${clientId} (Code: ${code}, Reason: ${reason.toString()}). Total clients: ${this.clients.size - 1}`);
-            this.handleDisconnect(clientId);
+            this.handleDisconnect(clientId, code, reason.toString());
         });
 
         // Handle WebSocket errors
         ws.on('error', (error: Error) => {
             console.error(`❌ WebSocket error for client ${clientId}:`, error);
-            this.handleDisconnect(clientId);
+            this.handleDisconnect(clientId, 1002, error.message);
         });
 
         // Handle heartbeat pong responses
@@ -195,6 +205,12 @@ export class WebSocketConnectionManager {
         if (userInfo) {
             client.user = { ...client.user, ...userInfo };
         }
+
+        // Update session with room and user info
+        this.sessionManager.updateSession(clientId, {
+            roomId,
+            userInfo: client.user
+        });
 
         // Add to room tracking
         if (!this.rooms.has(roomId)) {
@@ -297,20 +313,116 @@ export class WebSocketConnectionManager {
         });
     }
 
-    private handleDisconnect(clientId: string): void {
+    private handleReconnect(clientId: string, message: any, _context: any): void {
+        const { reconnectToken } = message.payload || {};
+
+        console.log(`🔄 Reconnection attempt from client ${clientId} with token ${reconnectToken}`);
+
+        // Try to reconnect using session manager
+        const reconnectResult = this.sessionManager.attemptReconnect(clientId, reconnectToken);
+
+        if (reconnectResult.success && reconnectResult.session) {
+            const session = reconnectResult.session;
+            const client = this.clients.get(clientId);
+
+            if (client) {
+                // Update client with session data
+                client.session = session;
+                client.user = session.userInfo;
+
+                // Restore room membership if client was in a room
+                if (session.roomId) {
+                    client.roomId = session.roomId;
+
+                    // Add back to room tracking
+                    if (!this.rooms.has(session.roomId)) {
+                        this.rooms.set(session.roomId, new Set());
+                    }
+                    this.rooms.get(session.roomId)!.add(clientId);
+
+                    console.log(`🏠 Restored client ${clientId} to room: ${session.roomId}`);
+                }
+
+                // Send successful reconnection response
+                this.sendToClient(clientId, {
+                    type: 'reconnect_success',
+                    payload: {
+                        sessionRecovered: true,
+                        roomId: session.roomId,
+                        userInfo: session.userInfo,
+                        sessionId: session.sessionId,
+                        reconnectAttempts: session.reconnectAttempts,
+                        newReconnectToken: session.reconnectToken
+                    },
+                    timestamp: Date.now()
+                });
+
+                // Notify room members if back in a room
+                if (session.roomId) {
+                    this.broadcastToRoom(session.roomId, {
+                        type: 'user_joined',
+                        payload: {
+                            userId: clientId,
+                            roomId: session.roomId,
+                            userInfo: session.userInfo,
+                            roomMembers: this.rooms.get(session.roomId)?.size || 1
+                        },
+                        timestamp: Date.now()
+                    }, clientId);
+                }
+
+                console.log(`✅ Client ${clientId} successfully reconnected to session ${session.sessionId}`);
+            }
+        } else {
+            // Reconnection failed
+            this.sendErrorMessage(
+                clientId,
+                ERROR_CODES.RECONNECT_FAILED,
+                reconnectResult.error || 'Session recovery failed',
+                {
+                    reconnectAttempts: 0,
+                    canRetry: false
+                }
+            );
+
+            console.log(`❌ Reconnection failed for client ${clientId}: ${reconnectResult.error}`);
+        }
+    }
+
+    private handleDisconnect(clientId: string, disconnectCode?: number, disconnectReason?: string): void {
         const client = this.clients.get(clientId);
         if (!client) return;
 
-        // Leave room if in one
+        // Inform session manager about disconnect
+        this.sessionManager.handleDisconnect(clientId, disconnectCode, disconnectReason);
+
+        // Determine if this is a graceful disconnect or if we should allow reconnection
+        const isGracefulDisconnect = disconnectCode === 1000 || disconnectCode === 1001;
+        const shouldNotifyRoom = isGracefulDisconnect ||
+            !this.sessionManager.shouldAllowReconnect(clientId);
+
+        // Leave room if in one (only notify room members if it's a permanent disconnect)
         if (client.roomId) {
-            this.leaveRoom(clientId, client.roomId);
+            if (shouldNotifyRoom) {
+                this.leaveRoom(clientId, client.roomId);
+            } else {
+                // For temporary disconnects, just remove from room tracking but keep session
+                const room = this.rooms.get(client.roomId);
+                if (room) {
+                    room.delete(clientId);
+                    if (room.size === 0) {
+                        this.rooms.delete(client.roomId);
+                    }
+                }
+                console.log(`🔄 Client ${clientId} temporarily disconnected from room ${client.roomId} (reconnection possible)`);
+            }
         }
 
         // Remove client and cleanup rate limit
         this.clients.delete(clientId);
         this.rateLimiter.resetLimit(clientId);
 
-        console.log(`👋 Client cleanup completed for: ${clientId}`);
+        console.log(`👋 Client cleanup completed for: ${clientId} (Graceful: ${isGracefulDisconnect})`);
     }
 
     private leaveRoom(clientId: string, roomId: string): void {
@@ -466,8 +578,17 @@ export class WebSocketConnectionManager {
                 maxMessages: number;
                 windowMs: number;
             };
+            sessionStats: {
+                activeSessions: number;
+                totalSessions: number;
+                averageSessionDuration: number;
+                totalReconnects: number;
+                disconnectReasons: Record<string, number>;
+            };
         };
     } {
+        const sessionStats = this.sessionManager.getStatistics();
+
         return {
             version: PROTOCOL_VERSION,
             supportedMessageTypes: SUPPORTED_MESSAGE_TYPES,
@@ -478,6 +599,13 @@ export class WebSocketConnectionManager {
                 rateLimitSettings: {
                     maxMessages: 100, // From constructor
                     windowMs: 60000
+                },
+                sessionStats: {
+                    activeSessions: sessionStats.activeSessions,
+                    totalSessions: sessionStats.totalSessions,
+                    averageSessionDuration: Math.round(sessionStats.averageSessionDuration / 1000), // In seconds
+                    totalReconnects: sessionStats.totalReconnects,
+                    disconnectReasons: sessionStats.disconnectReasons
                 }
             }
         };
@@ -501,6 +629,9 @@ export class WebSocketConnectionManager {
             });
             client.ws.close(1001, 'Server shutdown');
         });
+
+        // Shutdown session manager
+        this.sessionManager.shutdown();
 
         // Clear data structures
         this.clients.clear();

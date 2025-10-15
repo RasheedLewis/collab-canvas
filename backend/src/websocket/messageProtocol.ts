@@ -34,12 +34,14 @@ export const SUPPORTED_MESSAGE_TYPES = [
     'leave_room',
     'auth',
     'heartbeat',
+    'reconnect',
     'connection_established',
     'room_joined',
     'room_left',
     'user_joined',
     'user_left',
     'auth_success',
+    'reconnect_success',
     'error',
     'server_shutdown',
     'heartbeat_ack'
@@ -81,6 +83,14 @@ export const ClientMessageSchemas = {
 
     heartbeat: BaseMessageSchema.extend({
         type: z.literal('heartbeat'),
+    }),
+
+    reconnect: BaseMessageSchema.extend({
+        type: z.literal('reconnect'),
+        payload: z.object({
+            reconnectToken: z.string().min(1, 'Reconnect token is required'),
+            lastSessionId: z.string().optional(),
+        }),
     }),
 
     // Custom message for extensibility
@@ -153,6 +163,18 @@ export const ServerMessageSchemas = {
         }),
     }),
 
+    reconnect_success: BaseMessageSchema.extend({
+        type: z.literal('reconnect_success'),
+        payload: z.object({
+            sessionRecovered: z.boolean(),
+            roomId: z.string().optional(),
+            userInfo: UserInfoSchema.optional(),
+            sessionId: z.string(),
+            reconnectAttempts: z.number(),
+            newReconnectToken: z.string(),
+        }),
+    }),
+
     error: BaseMessageSchema.extend({
         type: z.literal('error'),
         payload: z.object({
@@ -196,6 +218,7 @@ export const ERROR_CODES = {
     // Connection errors
     CONNECTION_ERROR: 'CONNECTION_ERROR',
     RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+    RECONNECT_FAILED: 'RECONNECT_FAILED',
 
     // Server errors
     INTERNAL_ERROR: 'INTERNAL_ERROR',
