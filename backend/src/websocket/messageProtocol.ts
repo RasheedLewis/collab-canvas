@@ -44,7 +44,11 @@ export const SUPPORTED_MESSAGE_TYPES = [
     'reconnect_success',
     'error',
     'server_shutdown',
-    'heartbeat_ack'
+    'heartbeat_ack',
+    // Cursor synchronization messages
+    'cursor_moved',
+    'cursor_update',
+    'cursor_left'
 ] as const;
 
 export type MessageType = typeof SUPPORTED_MESSAGE_TYPES[number];
@@ -90,6 +94,37 @@ export const ClientMessageSchemas = {
         payload: z.object({
             reconnectToken: z.string().min(1, 'Reconnect token is required'),
             lastSessionId: z.string().optional(),
+        }),
+    }),
+
+    // Cursor synchronization messages
+    cursor_moved: BaseMessageSchema.extend({
+        type: z.literal('cursor_moved'),
+        payload: z.object({
+            x: z.number(),
+            y: z.number(),
+            roomId: z.string(),
+            userId: z.string().optional(), // Will be set by server
+        }),
+    }),
+
+    cursor_update: BaseMessageSchema.extend({
+        type: z.literal('cursor_update'),
+        payload: z.object({
+            x: z.number(),
+            y: z.number(),
+            roomId: z.string(),
+            userId: z.string().optional(), // Will be set by server
+            userInfo: UserInfoSchema.optional(), // Updated user info (name, color, etc.)
+            activeTool: z.string().optional(), // Current tool being used
+        }),
+    }),
+
+    cursor_left: BaseMessageSchema.extend({
+        type: z.literal('cursor_left'),
+        payload: z.object({
+            roomId: z.string(),
+            userId: z.string().optional(), // Will be set by server
         }),
     }),
 
@@ -194,6 +229,38 @@ export const ServerMessageSchemas = {
 
     heartbeat_ack: BaseMessageSchema.extend({
         type: z.literal('heartbeat_ack'),
+    }),
+
+    // Cursor synchronization response messages
+    cursor_moved: BaseMessageSchema.extend({
+        type: z.literal('cursor_moved'),
+        payload: z.object({
+            x: z.number(),
+            y: z.number(),
+            userId: z.string(),
+            roomId: z.string(),
+            userInfo: UserInfoSchema.optional(),
+        }),
+    }),
+
+    cursor_update: BaseMessageSchema.extend({
+        type: z.literal('cursor_update'),
+        payload: z.object({
+            x: z.number(),
+            y: z.number(),
+            userId: z.string(),
+            roomId: z.string(),
+            userInfo: UserInfoSchema.optional(),
+            activeTool: z.string().optional(),
+        }),
+    }),
+
+    cursor_left: BaseMessageSchema.extend({
+        type: z.literal('cursor_left'),
+        payload: z.object({
+            userId: z.string(),
+            roomId: z.string(),
+        }),
     }),
 };
 

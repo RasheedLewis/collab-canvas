@@ -22,6 +22,14 @@ export const API_CONFIG = {
         reconnectInterval: 3000, // 3 seconds
         maxReconnectAttempts: 10,
         heartbeatInterval: 30000, // 30 seconds
+    },
+
+    // Cursor synchronization configuration
+    CURSOR_CONFIG: {
+        throttleInterval: 100, // ~10fps for cursor movement (balanced performance/bandwidth)
+        batchSize: 5, // Batch cursor updates for efficiency
+        maxDistance: 5, // Minimum pixel distance to trigger update (reduce noise)
+        inactivityTimeout: 3000, // Hide cursor after 3 seconds of inactivity
     }
 };
 
@@ -153,6 +161,33 @@ export const MESSAGE_BUILDERS = {
      */
     heartbeat: () => ({
         type: 'heartbeat' as const,
+        timestamp: Date.now()
+    }),
+
+    /**
+     * Create cursor movement message
+     */
+    cursorMoved: (x: number, y: number, roomId: string) => ({
+        type: 'cursor_moved' as const,
+        payload: { x, y, roomId },
+        timestamp: Date.now()
+    }),
+
+    /**
+     * Create cursor update message (with user info and tool)
+     */
+    cursorUpdate: (x: number, y: number, roomId: string, userInfo?: any, activeTool?: string) => ({
+        type: 'cursor_update' as const,
+        payload: { x, y, roomId, userInfo, activeTool },
+        timestamp: Date.now()
+    }),
+
+    /**
+     * Create cursor left message
+     */
+    cursorLeft: (roomId: string) => ({
+        type: 'cursor_left' as const,
+        payload: { roomId },
         timestamp: Date.now()
     }),
 

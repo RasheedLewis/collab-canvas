@@ -162,6 +162,60 @@ export interface ServerShutdownMessage extends WebSocketMessage {
     };
 }
 
+// Cursor synchronization messages
+export interface CursorMovedMessage extends WebSocketMessage {
+    type: 'cursor_moved';
+    payload: {
+        x: number;
+        y: number;
+        roomId: string;
+        userId?: string;
+    };
+}
+
+export interface CursorUpdateMessage extends WebSocketMessage {
+    type: 'cursor_update';
+    payload: {
+        x: number;
+        y: number;
+        roomId: string;
+        userId?: string;
+        userInfo?: WebSocketUser;
+        activeTool?: string;
+    };
+}
+
+export interface CursorLeftMessage extends WebSocketMessage {
+    type: 'cursor_left';
+    payload: {
+        roomId: string;
+        userId?: string;
+    };
+}
+
+// Cursor event payloads for callbacks
+export interface CursorMovedPayload {
+    x: number;
+    y: number;
+    userId: string;
+    roomId: string;
+    userInfo?: WebSocketUser;
+}
+
+export interface CursorUpdatePayload {
+    x: number;
+    y: number;
+    userId: string;
+    roomId: string;
+    userInfo?: WebSocketUser;
+    activeTool?: string;
+}
+
+export interface CursorLeftPayload {
+    userId: string;
+    roomId: string;
+}
+
 // WebSocket hook configuration
 export interface WebSocketConfig {
     url: string;
@@ -201,6 +255,10 @@ export interface WebSocketHookReturn {
     onUserJoined: (callback: (payload: UserJoinedPayload) => void) => () => void;
     onUserLeft: (callback: (payload: UserLeftPayload) => void) => () => void;
     onError: (callback: (error: ErrorPayload) => void) => () => void;
+    // Cursor event listeners
+    onCursorMoved: (callback: (payload: CursorMovedPayload) => void) => () => void;
+    onCursorUpdate: (callback: (payload: CursorUpdatePayload) => void) => () => void;
+    onCursorLeft: (callback: (payload: CursorLeftPayload) => void) => () => void;
 
     // Connection info
     lastError: string | null;
@@ -216,3 +274,7 @@ export type ConnectionStateCallback = (state: WebSocketConnectionState) => void;
 export type UserJoinedCallback = (payload: UserJoinedPayload) => void;
 export type UserLeftCallback = (payload: UserLeftPayload) => void;
 export type ErrorCallback = (payload: ErrorPayload) => void;
+// Cursor callback types
+export type CursorMovedCallback = (payload: CursorMovedPayload) => void;
+export type CursorUpdateCallback = (payload: CursorUpdatePayload) => void;
+export type CursorLeftCallback = (payload: CursorLeftPayload) => void;

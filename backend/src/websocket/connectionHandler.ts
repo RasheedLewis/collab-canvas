@@ -47,7 +47,7 @@ export class WebSocketConnectionManager {
     constructor(server: Server) {
         this.wss = new WebSocketServer({ server });
         this.messageRouter = new MessageRouter();
-        this.rateLimiter = new RateLimiter(100, 60000); // 100 messages per minute
+        this.rateLimiter = new RateLimiter(300, 60000); // 300 messages per minute (5 per second) for cursor updates
         this.sessionManager = new SessionManager();
         this.initialize();
         this.setupMessageHandlers();
@@ -72,6 +72,10 @@ export class WebSocketConnectionManager {
         this.messageRouter.registerHandler('auth', this.handleAuthentication.bind(this));
         this.messageRouter.registerHandler('heartbeat', this.handleHeartbeat.bind(this));
         this.messageRouter.registerHandler('reconnect', this.handleReconnect.bind(this));
+        // Cursor synchronization handlers
+        this.messageRouter.registerHandler('cursor_moved', this.handleCursorMoved.bind(this));
+        this.messageRouter.registerHandler('cursor_update', this.handleCursorUpdate.bind(this));
+        this.messageRouter.registerHandler('cursor_left', this.handleCursorLeft.bind(this));
 
         console.log(`✅ Registered handlers for: ${this.messageRouter.getRegisteredTypes().join(', ')}`);
     }
@@ -146,14 +150,16 @@ export class WebSocketConnectionManager {
 
         // Handle client disconnect
         ws.on('close', (code: number, reason: Buffer) => {
-            console.log(`🔌 Client disconnected: ${clientId} (Code: ${code}, Reason: ${reason.toString()}). Total clients: ${this.clients.size - 1}`);
+            console.log(`🔌 Client disconnected: ${clientId} (Code: ${code}, Reason: ${reason.toString()})`);
             this.handleDisconnect(clientId, code, reason.toString());
+            console.log(`📊 Total clients after disconnect: ${this.clients.size}`);
         });
 
         // Handle WebSocket errors
         ws.on('error', (error: Error) => {
             console.error(`❌ WebSocket error for client ${clientId}:`, error);
             this.handleDisconnect(clientId, 1002, error.message);
+            console.log(`📊 Total clients after error cleanup: ${this.clients.size}`);
         });
 
         // Handle heartbeat pong responses
@@ -387,6 +393,79 @@ export class WebSocketConnectionManager {
 
             console.log(`❌ Reconnection failed for client ${clientId}: ${reconnectResult.error}`);
         }
+    }
+
+    // Cursor synchronization message handlers
+    private handleCursorMoved(clientId: string, message: any, _context: any): void {
+        const { x, y, roomId } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        // Broadcast cursor position to other users in the room
+        this.broadcastToRoom(roomId, {
+            type: 'cursor_moved',
+            payload: {
+                x,
+                y,
+                userId: clientId,
+                roomId,
+                userInfo: client.user
+            },
+            timestamp: Date.now()
+        }, clientId);
+    }
+
+    private handleCursorUpdate(clientId: string, message: any, _context: any): void {
+        const { x, y, roomId, userInfo, activeTool } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        // Update client user info if provided
+        if (userInfo) {
+            client.user = { ...client.user, ...userInfo };
+        }
+
+        // Broadcast cursor update to other users in the room
+        this.broadcastToRoom(roomId, {
+            type: 'cursor_update',
+            payload: {
+                x,
+                y,
+                userId: clientId,
+                roomId,
+                userInfo: client.user,
+                activeTool
+            },
+            timestamp: Date.now()
+        }, clientId);
+    }
+
+    private handleCursorLeft(clientId: string, message: any, _context: any): void {
+        const { roomId } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        // Broadcast cursor left to other users in the room
+        this.broadcastToRoom(roomId, {
+            type: 'cursor_left',
+            payload: {
+                userId: clientId,
+                roomId
+            },
+            timestamp: Date.now()
+        }, clientId);
     }
 
     private handleDisconnect(clientId: string, disconnectCode?: number, disconnectReason?: string): void {

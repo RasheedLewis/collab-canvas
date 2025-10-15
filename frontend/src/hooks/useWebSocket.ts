@@ -16,7 +16,13 @@ import type {
     ConnectionEstablishedPayload,
     RoomJoinedPayload,
     AuthSuccessPayload,
-    ReconnectSuccessPayload
+    ReconnectSuccessPayload,
+    CursorMovedCallback,
+    CursorUpdateCallback,
+    CursorLeftCallback,
+    CursorMovedPayload,
+    CursorUpdatePayload,
+    CursorLeftPayload
 } from '../types/websocket';
 
 // Default configuration
@@ -54,6 +60,10 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
     const userJoinedListenersRef = useRef<Set<UserJoinedCallback>>(new Set());
     const userLeftListenersRef = useRef<Set<UserLeftCallback>>(new Set());
     const errorListenersRef = useRef<Set<ErrorCallback>>(new Set());
+    // Cursor event listeners storage
+    const cursorMovedListenersRef = useRef<Set<CursorMovedCallback>>(new Set());
+    const cursorUpdateListenersRef = useRef<Set<CursorUpdateCallback>>(new Set());
+    const cursorLeftListenersRef = useRef<Set<CursorLeftCallback>>(new Set());
 
     // Utility function to emit to all listeners
     const emitToListeners = useCallback(<T>(listeners: Set<(payload: T) => void>, payload: T) => {
@@ -181,6 +191,24 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
 
                 case 'server_shutdown': {
                     console.warn('🛑 Server is shutting down');
+                    break;
+                }
+
+                case 'cursor_moved': {
+                    const payload = message.payload as CursorMovedPayload;
+                    emitToListeners(cursorMovedListenersRef.current, payload);
+                    break;
+                }
+
+                case 'cursor_update': {
+                    const payload = message.payload as CursorUpdatePayload;
+                    emitToListeners(cursorUpdateListenersRef.current, payload);
+                    break;
+                }
+
+                case 'cursor_left': {
+                    const payload = message.payload as CursorLeftPayload;
+                    emitToListeners(cursorLeftListenersRef.current, payload);
                     break;
                 }
 
@@ -433,6 +461,22 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         return () => errorListenersRef.current.delete(callback);
     }, []);
 
+    // Cursor event listener registration functions
+    const onCursorMoved = useCallback((callback: CursorMovedCallback) => {
+        cursorMovedListenersRef.current.add(callback);
+        return () => cursorMovedListenersRef.current.delete(callback);
+    }, []);
+
+    const onCursorUpdate = useCallback((callback: CursorUpdateCallback) => {
+        cursorUpdateListenersRef.current.add(callback);
+        return () => cursorUpdateListenersRef.current.delete(callback);
+    }, []);
+
+    const onCursorLeft = useCallback((callback: CursorLeftCallback) => {
+        cursorLeftListenersRef.current.add(callback);
+        return () => cursorLeftListenersRef.current.delete(callback);
+    }, []);
+
     // Cleanup on unmount
     useEffect(() => {
         return () => {
@@ -472,6 +516,10 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         onUserJoined,
         onUserLeft,
         onError,
+        // Cursor event listeners
+        onCursorMoved,
+        onCursorUpdate,
+        onCursorLeft,
 
         // Connection info
         lastError,
