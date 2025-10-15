@@ -13,8 +13,14 @@ const app = express();
 const server = createServer(app);
 
 // Configure CORS for cross-origin requests
+// Configure allowed origins for CORS
+const allowedOrigins: string[] = ['http://localhost:5173']; // Development
+if (process.env.FRONTEND_URL) {
+    allowedOrigins.push(process.env.FRONTEND_URL); // Production
+}
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: allowedOrigins,
     credentials: true
 }));
 
