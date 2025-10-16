@@ -25,6 +25,43 @@ const UserInfoSchema = z.object({
     avatarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
 });
 
+// Canvas object schemas
+const BaseCanvasObjectSchema = z.object({
+    id: z.string().min(1, 'Object ID is required'),
+    x: z.number(),
+    y: z.number(),
+    type: z.enum(['rectangle', 'circle', 'text']),
+    color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid color format'),
+    createdAt: z.number(),
+    updatedAt: z.number(),
+    userId: z.string().optional(),
+});
+
+const RectangleObjectSchema = BaseCanvasObjectSchema.extend({
+    type: z.literal('rectangle'),
+    width: z.number().positive('Width must be positive'),
+    height: z.number().positive('Height must be positive'),
+});
+
+const CircleObjectSchema = BaseCanvasObjectSchema.extend({
+    type: z.literal('circle'),
+    radius: z.number().positive('Radius must be positive'),
+});
+
+const TextObjectSchema = BaseCanvasObjectSchema.extend({
+    type: z.literal('text'),
+    text: z.string(),
+    fontSize: z.number().positive('Font size must be positive'),
+    fontFamily: z.string().optional(),
+    fontStyle: z.string().optional(),
+});
+
+const CanvasObjectSchema = z.discriminatedUnion('type', [
+    RectangleObjectSchema,
+    CircleObjectSchema,
+    TextObjectSchema,
+]);
+
 // Protocol version and capabilities
 export const PROTOCOL_VERSION = '1.0.0';
 export const SUPPORTED_MESSAGE_TYPES = [
@@ -48,7 +85,14 @@ export const SUPPORTED_MESSAGE_TYPES = [
     // Cursor synchronization messages
     'cursor_moved',
     'cursor_update',
-    'cursor_left'
+    'cursor_left',
+    // Object synchronization messages
+    'object_created',
+    'object_updated',
+    'object_moved',
+    'object_deleted',
+    'canvas_state_requested',
+    'canvas_state_sync'
 ] as const;
 
 export type MessageType = typeof SUPPORTED_MESSAGE_TYPES[number];
@@ -125,6 +169,52 @@ export const ClientMessageSchemas = {
         payload: z.object({
             roomId: z.string(),
             userId: z.string().optional(), // Will be set by server
+        }),
+    }),
+
+    // Object synchronization messages
+    object_created: BaseMessageSchema.extend({
+        type: z.literal('object_created'),
+        payload: z.object({
+            roomId: z.string(),
+            object: CanvasObjectSchema,
+        }),
+    }),
+
+    object_updated: BaseMessageSchema.extend({
+        type: z.literal('object_updated'),
+        payload: z.object({
+            roomId: z.string(),
+            objectId: z.string().min(1, 'Object ID is required'),
+            updates: z.record(z.string(), z.any()).refine(
+                (updates) => Object.keys(updates).length > 0,
+                'Updates object cannot be empty'
+            ),
+        }),
+    }),
+
+    object_moved: BaseMessageSchema.extend({
+        type: z.literal('object_moved'),
+        payload: z.object({
+            roomId: z.string(),
+            objectId: z.string().min(1, 'Object ID is required'),
+            x: z.number(),
+            y: z.number(),
+        }),
+    }),
+
+    object_deleted: BaseMessageSchema.extend({
+        type: z.literal('object_deleted'),
+        payload: z.object({
+            roomId: z.string(),
+            objectId: z.string().min(1, 'Object ID is required'),
+        }),
+    }),
+
+    canvas_state_requested: BaseMessageSchema.extend({
+        type: z.literal('canvas_state_requested'),
+        payload: z.object({
+            roomId: z.string(),
         }),
     }),
 
@@ -262,6 +352,55 @@ export const ServerMessageSchemas = {
             roomId: z.string(),
         }),
     }),
+
+    // Object synchronization response messages
+    object_created: BaseMessageSchema.extend({
+        type: z.literal('object_created'),
+        payload: z.object({
+            roomId: z.string(),
+            object: CanvasObjectSchema,
+            userId: z.string(), // User who created the object
+        }),
+    }),
+
+    object_updated: BaseMessageSchema.extend({
+        type: z.literal('object_updated'),
+        payload: z.object({
+            roomId: z.string(),
+            objectId: z.string(),
+            updates: z.record(z.string(), z.any()),
+            userId: z.string(), // User who updated the object
+        }),
+    }),
+
+    object_moved: BaseMessageSchema.extend({
+        type: z.literal('object_moved'),
+        payload: z.object({
+            roomId: z.string(),
+            objectId: z.string(),
+            x: z.number(),
+            y: z.number(),
+            userId: z.string(), // User who moved the object
+        }),
+    }),
+
+    object_deleted: BaseMessageSchema.extend({
+        type: z.literal('object_deleted'),
+        payload: z.object({
+            roomId: z.string(),
+            objectId: z.string(),
+            userId: z.string(), // User who deleted the object
+        }),
+    }),
+
+    canvas_state_sync: BaseMessageSchema.extend({
+        type: z.literal('canvas_state_sync'),
+        payload: z.object({
+            roomId: z.string(),
+            objects: z.array(CanvasObjectSchema),
+            timestamp: z.number(),
+        }),
+    }),
 };
 
 // Error codes for standardized error handling
@@ -290,6 +429,13 @@ export const ERROR_CODES = {
     // Server errors
     INTERNAL_ERROR: 'INTERNAL_ERROR',
     SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+
+    // Object synchronization errors
+    OBJECT_NOT_FOUND: 'OBJECT_NOT_FOUND',
+    OBJECT_ACCESS_DENIED: 'OBJECT_ACCESS_DENIED',
+    INVALID_OBJECT_DATA: 'INVALID_OBJECT_DATA',
+    OBJECT_CONFLICT: 'OBJECT_CONFLICT',
+    CANVAS_STATE_ERROR: 'CANVAS_STATE_ERROR',
 } as const;
 
 export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];
@@ -606,6 +752,15 @@ export class RateLimiter {
         }
     }
 }
+
+// Export canvas object schemas for use in other modules
+export {
+    BaseCanvasObjectSchema,
+    RectangleObjectSchema,
+    CircleObjectSchema,
+    TextObjectSchema,
+    CanvasObjectSchema,
+};
 
 export default {
     PROTOCOL_VERSION,

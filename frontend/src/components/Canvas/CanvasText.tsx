@@ -6,9 +6,10 @@ import { useCanvasStore } from '../../store/canvasStore';
 
 interface CanvasTextProps {
   textObject: TextObject;
+  onMove: (objectId: string, x: number, y: number) => void;
 }
 
-const CanvasText: React.FC<CanvasTextProps> = ({ textObject }) => {
+const CanvasText: React.FC<CanvasTextProps> = ({ textObject, onMove }) => {
   const { updateObject, selectObject, selectedObjectId, editingTextId, setEditingTextId } = useCanvasStore();
   const textRef = useRef<Konva.Text>(null);
   
@@ -18,10 +19,7 @@ const CanvasText: React.FC<CanvasTextProps> = ({ textObject }) => {
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true; // Prevent event from bubbling to Stage
     const node = e.target;
-    updateObject(textObject.id, {
-      x: node.x(),
-      y: node.y(),
-    });
+    onMove(textObject.id, node.x(), node.y());
   };
   
   const handleClick = (e: Konva.KonvaEventObject<MouseEvent>) => {

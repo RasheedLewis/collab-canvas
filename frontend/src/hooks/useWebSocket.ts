@@ -22,7 +22,12 @@ import type {
     CursorLeftCallback,
     CursorMovedPayload,
     CursorUpdatePayload,
-    CursorLeftPayload
+    CursorLeftPayload,
+    ObjectCreatedCallback,
+    ObjectUpdatedCallback,
+    ObjectMovedCallback,
+    ObjectDeletedCallback,
+    CanvasStateSyncCallback
 } from '../types/websocket';
 
 // Default configuration
@@ -64,6 +69,13 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
     const cursorMovedListenersRef = useRef<Set<CursorMovedCallback>>(new Set());
     const cursorUpdateListenersRef = useRef<Set<CursorUpdateCallback>>(new Set());
     const cursorLeftListenersRef = useRef<Set<CursorLeftCallback>>(new Set());
+
+    // Object synchronization event listeners storage
+    const objectCreatedListenersRef = useRef<Set<ObjectCreatedCallback>>(new Set());
+    const objectUpdatedListenersRef = useRef<Set<ObjectUpdatedCallback>>(new Set());
+    const objectMovedListenersRef = useRef<Set<ObjectMovedCallback>>(new Set());
+    const objectDeletedListenersRef = useRef<Set<ObjectDeletedCallback>>(new Set());
+    const canvasStateSyncListenersRef = useRef<Set<CanvasStateSyncCallback>>(new Set());
 
     // Utility function to emit to all listeners
     const emitToListeners = useCallback(<T>(listeners: Set<(payload: T) => void>, payload: T) => {
@@ -209,6 +221,32 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
                 case 'cursor_left': {
                     const payload = message.payload as CursorLeftPayload;
                     emitToListeners(cursorLeftListenersRef.current, payload);
+                    break;
+                }
+
+                // Object synchronization message handlers
+                case 'object_created': {
+                    emitToListeners(objectCreatedListenersRef.current, message.payload);
+                    break;
+                }
+
+                case 'object_updated': {
+                    emitToListeners(objectUpdatedListenersRef.current, message.payload);
+                    break;
+                }
+
+                case 'object_moved': {
+                    emitToListeners(objectMovedListenersRef.current, message.payload);
+                    break;
+                }
+
+                case 'object_deleted': {
+                    emitToListeners(objectDeletedListenersRef.current, message.payload);
+                    break;
+                }
+
+                case 'canvas_state_sync': {
+                    emitToListeners(canvasStateSyncListenersRef.current, message.payload);
                     break;
                 }
 
@@ -477,6 +515,32 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         return () => cursorLeftListenersRef.current.delete(callback);
     }, []);
 
+    // Object synchronization event listener registration functions
+    const onObjectCreated = useCallback((callback: ObjectCreatedCallback) => {
+        objectCreatedListenersRef.current.add(callback);
+        return () => objectCreatedListenersRef.current.delete(callback);
+    }, []);
+
+    const onObjectUpdated = useCallback((callback: ObjectUpdatedCallback) => {
+        objectUpdatedListenersRef.current.add(callback);
+        return () => objectUpdatedListenersRef.current.delete(callback);
+    }, []);
+
+    const onObjectMoved = useCallback((callback: ObjectMovedCallback) => {
+        objectMovedListenersRef.current.add(callback);
+        return () => objectMovedListenersRef.current.delete(callback);
+    }, []);
+
+    const onObjectDeleted = useCallback((callback: ObjectDeletedCallback) => {
+        objectDeletedListenersRef.current.add(callback);
+        return () => objectDeletedListenersRef.current.delete(callback);
+    }, []);
+
+    const onCanvasStateSync = useCallback((callback: CanvasStateSyncCallback) => {
+        canvasStateSyncListenersRef.current.add(callback);
+        return () => canvasStateSyncListenersRef.current.delete(callback);
+    }, []);
+
     // Cleanup on unmount
     useEffect(() => {
         return () => {
@@ -520,6 +584,13 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         onCursorMoved,
         onCursorUpdate,
         onCursorLeft,
+
+        // Object synchronization event listeners
+        onObjectCreated,
+        onObjectUpdated,
+        onObjectMoved,
+        onObjectDeleted,
+        onCanvasStateSync,
 
         // Connection info
         lastError,

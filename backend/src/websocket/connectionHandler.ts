@@ -77,6 +77,13 @@ export class WebSocketConnectionManager {
         this.messageRouter.registerHandler('cursor_update', this.handleCursorUpdate.bind(this));
         this.messageRouter.registerHandler('cursor_left', this.handleCursorLeft.bind(this));
 
+        // Object synchronization handlers
+        this.messageRouter.registerHandler('object_created', this.handleObjectCreated.bind(this));
+        this.messageRouter.registerHandler('object_updated', this.handleObjectUpdated.bind(this));
+        this.messageRouter.registerHandler('object_moved', this.handleObjectMoved.bind(this));
+        this.messageRouter.registerHandler('object_deleted', this.handleObjectDeleted.bind(this));
+        this.messageRouter.registerHandler('canvas_state_requested', this.handleCanvasStateRequested.bind(this));
+
         console.log(`✅ Registered handlers for: ${this.messageRouter.getRegisteredTypes().join(', ')}`);
     }
 
@@ -466,6 +473,130 @@ export class WebSocketConnectionManager {
             },
             timestamp: Date.now()
         }, clientId);
+    }
+
+    // Object synchronization message handlers
+    private handleObjectCreated(clientId: string, message: any, _context: any): void {
+        const { roomId, object } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        // Add user ID to the object if not present
+        const objectWithUser = {
+            ...object,
+            userId: object.userId || clientId,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
+
+        // Broadcast object creation to all users in the room (including sender)
+        this.broadcastToRoom(roomId, {
+            type: 'object_created',
+            payload: {
+                roomId,
+                object: objectWithUser,
+                userId: clientId
+            },
+            timestamp: Date.now()
+        });
+    }
+
+    private handleObjectUpdated(clientId: string, message: any, _context: any): void {
+        const { roomId, objectId, updates } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        // Add timestamp to updates
+        const updatesWithTimestamp = {
+            ...updates,
+            updatedAt: Date.now()
+        };
+
+        // Broadcast object update to all users in the room (including sender for confirmation)
+        this.broadcastToRoom(roomId, {
+            type: 'object_updated',
+            payload: {
+                roomId,
+                objectId,
+                updates: updatesWithTimestamp,
+                userId: clientId
+            },
+            timestamp: Date.now()
+        });
+    }
+
+    private handleObjectMoved(clientId: string, message: any, _context: any): void {
+        const { roomId, objectId, x, y } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        // Broadcast object movement to all users in the room (including sender)
+        this.broadcastToRoom(roomId, {
+            type: 'object_moved',
+            payload: {
+                roomId,
+                objectId,
+                x,
+                y,
+                userId: clientId
+            },
+            timestamp: Date.now()
+        });
+    }
+
+    private handleObjectDeleted(clientId: string, message: any, _context: any): void {
+        const { roomId, objectId } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        // Broadcast object deletion to all users in the room (including sender for confirmation)
+        this.broadcastToRoom(roomId, {
+            type: 'object_deleted',
+            payload: {
+                roomId,
+                objectId,
+                userId: clientId
+            },
+            timestamp: Date.now()
+        });
+    }
+
+    private handleCanvasStateRequested(clientId: string, message: any, _context: any): void {
+        const { roomId } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        // For now, send an empty canvas state
+        // This will be enhanced when we add persistence in PR #7
+        this.sendToClient(clientId, {
+            type: 'canvas_state_sync',
+            payload: {
+                roomId,
+                objects: [], // TODO: Load from persistence layer
+                timestamp: Date.now()
+            },
+            timestamp: Date.now()
+        });
     }
 
     private handleDisconnect(clientId: string, disconnectCode?: number, disconnectReason?: string): void {

@@ -6,20 +6,18 @@ import { useCanvasStore } from '../../store/canvasStore';
 
 interface CanvasCircleProps {
   circle: CircleObject;
+  onMove: (objectId: string, x: number, y: number) => void;
 }
 
-const CanvasCircle: React.FC<CanvasCircleProps> = ({ circle }) => {
-  const { updateObject, selectObject, selectedObjectId } = useCanvasStore();
+const CanvasCircle: React.FC<CanvasCircleProps> = ({ circle, onMove }) => {
+  const { selectObject, selectedObjectId } = useCanvasStore();
   
   const isSelected = selectedObjectId === circle.id;
   
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true; // Prevent event from bubbling to Stage
     const node = e.target;
-    updateObject(circle.id, {
-      x: node.x(),
-      y: node.y(),
-    });
+    onMove(circle.id, node.x(), node.y());
   };
   
   const handleClick = (e: Konva.KonvaEventObject<MouseEvent>) => {

@@ -8,8 +8,12 @@ import CanvasText from './CanvasText';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import API from '../../lib/api';
-import type { RectangleObject, CircleObject, TextObject } from '../../types/canvas';
-import type { CursorMovedPayload, CursorUpdatePayload, CursorLeftPayload } from '../../types/websocket';
+import type { RectangleObject, CircleObject, TextObject, CanvasObject } from '../../types/canvas';
+import type { 
+  CursorMovedPayload, 
+  CursorUpdatePayload, 
+  CursorLeftPayload
+} from '../../types/websocket';
 
 interface CanvasProps {
   width?: number;
@@ -36,7 +40,17 @@ const Canvas: React.FC<CanvasProps> = ({
     radius?: number;
   } | null>(null);
   
-  const { objects, tool, createRectangle, createCircle, createText, selectObject } = useCanvasStore();
+  const { 
+    objects, 
+    tool, 
+    createRectangle, 
+    createCircle, 
+    createText, 
+    selectObject,
+    addObject,
+    updateObject,
+    deleteObject
+  } = useCanvasStore();
 
   // WebSocket connection for real-time collaboration
   const ws = useWebSocket({
@@ -53,6 +67,11 @@ const Canvas: React.FC<CanvasProps> = ({
     onCursorMoved,
     onCursorUpdate,
     onCursorLeft,
+    onObjectCreated,
+    onObjectUpdated,
+    onObjectMoved,
+    onObjectDeleted,
+    onCanvasStateSync,
   } = ws;
 
   // State for tracking other users' cursors with interpolation
@@ -422,6 +441,112 @@ const Canvas: React.FC<CanvasProps> = ({
     return () => clearInterval(cleanupInterval);
   }, []);
 
+  // Object synchronization functions
+  const sendObjectCreated = useCallback((object: CanvasObject) => {
+    if (!isConnected || !roomId) return;
+    
+    sendMessage({
+      type: 'object_created',
+      payload: {
+        roomId,
+        object
+      },
+      timestamp: Date.now()
+    });
+  }, [isConnected, roomId, sendMessage]);
+
+  const sendObjectMoved = useCallback((objectId: string, x: number, y: number) => {
+    if (!isConnected || !roomId) return;
+    
+    sendMessage({
+      type: 'object_moved',
+      payload: {
+        roomId,
+        objectId,
+        x,
+        y
+      },
+      timestamp: Date.now()
+    });
+  }, [isConnected, roomId, sendMessage]);
+
+  // TODO: Implement these functions when adding object updates/deletions
+  // const sendObjectUpdated = useCallback((objectId: string, updates: Partial<CanvasObject>) => { ... };
+  // const sendObjectDeleted = useCallback((objectId: string) => { ... };
+
+  // Object synchronization event handlers
+  useEffect(() => {
+    const unsubscribeObjectCreated = onObjectCreated((payload) => {
+      // Don't add our own objects (they're already in the store)
+      if (payload.userId === clientId) return;
+      
+      addObject(payload.object as CanvasObject);
+    });
+
+    const unsubscribeObjectMoved = onObjectMoved((payload) => {
+      // Don't update our own moves (they're already in the store)  
+      if (payload.userId === clientId) return;
+      
+      updateObject(payload.objectId, { x: payload.x, y: payload.y });
+    });
+
+    const unsubscribeObjectUpdated = onObjectUpdated((payload) => {
+      // Don't update our own changes (they're already in the store)
+      if (payload.userId === clientId) return;
+      
+      updateObject(payload.objectId, payload.updates);
+    });
+
+    const unsubscribeObjectDeleted = onObjectDeleted((payload) => {
+      // Don't delete our own objects (they're already removed from the store)
+      if (payload.userId === clientId) return;
+      
+      deleteObject(payload.objectId);
+    });
+
+    const unsubscribeCanvasStateSync = onCanvasStateSync((payload) => {
+      // Replace all objects with synced state
+      payload.objects.forEach(object => {
+        addObject(object as CanvasObject);
+      });
+    });
+
+    return () => {
+      unsubscribeObjectCreated();
+      unsubscribeObjectMoved();
+      unsubscribeObjectUpdated();  
+      unsubscribeObjectDeleted();
+      unsubscribeCanvasStateSync();
+    };
+  }, [onObjectCreated, onObjectMoved, onObjectUpdated, onObjectDeleted, onCanvasStateSync, clientId, addObject, updateObject, deleteObject]);
+
+  // Wrapper functions for object creation with broadcasting
+  const createRectangleWithSync = useCallback((x: number, y: number, width?: number, height?: number) => {
+    const rectangle = createRectangle(x, y, width, height);
+    sendObjectCreated(rectangle);
+    return rectangle;
+  }, [createRectangle, sendObjectCreated]);
+
+  const createCircleWithSync = useCallback((x: number, y: number, radius?: number) => {
+    const circle = createCircle(x, y, radius);
+    sendObjectCreated(circle);
+    return circle;
+  }, [createCircle, sendObjectCreated]);
+
+  const createTextWithSync = useCallback((x: number, y: number, text?: string) => {
+    const textObject = createText(x, y, text);
+    sendObjectCreated(textObject);
+    return textObject;
+  }, [createText, sendObjectCreated]);
+
+  // Wrapper function for object movement with broadcasting
+  const moveObjectWithSync = useCallback((objectId: string, x: number, y: number) => {
+    // Update local store first (optimistic update)
+    updateObject(objectId, { x, y });
+    // Then broadcast to other users
+    sendObjectMoved(objectId, x, y);
+  }, [updateObject, sendObjectMoved]);
+
   // Force re-render when cursors are animating
   useEffect(() => {
     if (otherCursors.size > 0) {
@@ -502,7 +627,7 @@ const Canvas: React.FC<CanvasProps> = ({
             
             // Text objects are created immediately on click
             if (tool === 'text') {
-              createText(canvasCoords.x, canvasCoords.y);
+              createTextWithSync(canvasCoords.x, canvasCoords.y);
               return;
             }
             
@@ -584,12 +709,12 @@ const Canvas: React.FC<CanvasProps> = ({
     if (previewShape.type === 'rectangle' && previewShape.width && previewShape.height) {
       // Only create if the shape has meaningful size
       if (previewShape.width > 5 && previewShape.height > 5) {
-        createRectangle(previewShape.x, previewShape.y, previewShape.width, previewShape.height);
+        createRectangleWithSync(previewShape.x, previewShape.y, previewShape.width, previewShape.height);
       }
     } else if (previewShape.type === 'circle' && previewShape.radius) {
       // Only create if the shape has meaningful size
       if (previewShape.radius > 5) {
-        createCircle(previewShape.x, previewShape.y, previewShape.radius);
+        createCircleWithSync(previewShape.x, previewShape.y, previewShape.radius);
       }
     }
 
@@ -636,21 +761,24 @@ const Canvas: React.FC<CanvasProps> = ({
               return (
                 <CanvasRectangle 
                   key={obj.id} 
-                  rectangle={obj as RectangleObject} 
+                  rectangle={obj as RectangleObject}
+                  onMove={moveObjectWithSync}
                 />
               );
             } else if (obj.type === 'circle') {
               return (
                 <CanvasCircle 
                   key={obj.id} 
-                  circle={obj as CircleObject} 
+                  circle={obj as CircleObject}
+                  onMove={moveObjectWithSync}
                 />
               );
             } else if (obj.type === 'text') {
               return (
                 <CanvasText 
                   key={obj.id} 
-                  textObject={obj as TextObject} 
+                  textObject={obj as TextObject}
+                  onMove={moveObjectWithSync}
                 />
               );
             }

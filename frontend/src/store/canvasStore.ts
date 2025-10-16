@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { CanvasObject, RectangleObject, CircleObject, TextObject, CanvasState } from '../types/canvas';
 import { COLOR_PALETTE } from '../types/canvas';
+import { useAuthStore } from './authStore';
 
 interface CanvasStore extends CanvasState {
     // Actions
@@ -30,6 +31,12 @@ interface CanvasStore extends CanvasState {
 
 const generateId = (): string => {
     return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+};
+
+// Helper function to get current user ID
+const getCurrentUserId = (): string | undefined => {
+    const authState = useAuthStore.getState();
+    return authState.user?.uid;
 };
 
 export const useCanvasStore = create<CanvasStore>()(
@@ -85,6 +92,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     color: get().activeColor,
                     createdAt: Date.now(),
                     updatedAt: Date.now(),
+                    userId: getCurrentUserId(),
                 };
 
                 get().addObject(rectangle);
@@ -101,6 +109,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     color: get().activeColor,
                     createdAt: Date.now(),
                     updatedAt: Date.now(),
+                    userId: getCurrentUserId(),
                 };
 
                 get().addObject(circle);
@@ -119,6 +128,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     color: get().activeColor,
                     createdAt: Date.now(),
                     updatedAt: Date.now(),
+                    userId: getCurrentUserId(),
                 };
 
                 get().addObject(textObject);

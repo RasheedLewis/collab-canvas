@@ -260,6 +260,13 @@ export interface WebSocketHookReturn {
     onCursorUpdate: (callback: (payload: CursorUpdatePayload) => void) => () => void;
     onCursorLeft: (callback: (payload: CursorLeftPayload) => void) => () => void;
 
+    // Object synchronization event listeners
+    onObjectCreated: (callback: ObjectCreatedCallback) => () => void;
+    onObjectUpdated: (callback: ObjectUpdatedCallback) => () => void;
+    onObjectMoved: (callback: ObjectMovedCallback) => () => void;
+    onObjectDeleted: (callback: ObjectDeletedCallback) => () => void;
+    onCanvasStateSync: (callback: CanvasStateSyncCallback) => () => void;
+
     // Connection info
     lastError: string | null;
     reconnectAttempts: number;
@@ -270,6 +277,112 @@ export interface WebSocketHookReturn {
 
 // Event callback types
 export type MessageCallback = (message: WebSocketMessage) => void;
+
+// Object synchronization message types (matching backend protocol)
+export interface ObjectCreatedMessage extends WebSocketMessage {
+    type: 'object_created';
+    payload: {
+        roomId: string;
+        object: {
+            id: string;
+            x: number;
+            y: number;
+            type: 'rectangle' | 'circle' | 'text';
+            color: string;
+            createdAt: number;
+            updatedAt: number;
+            userId?: string;
+            // Type-specific properties
+            width?: number;  // rectangle
+            height?: number; // rectangle
+            radius?: number; // circle
+            text?: string;   // text
+            fontSize?: number; // text
+            fontFamily?: string; // text
+            fontStyle?: string;  // text
+        };
+        userId: string;
+    };
+}
+
+export interface ObjectUpdatedMessage extends WebSocketMessage {
+    type: 'object_updated';
+    payload: {
+        roomId: string;
+        objectId: string;
+        updates: Record<string, any>;
+        userId: string;
+    };
+}
+
+export interface ObjectMovedMessage extends WebSocketMessage {
+    type: 'object_moved';
+    payload: {
+        roomId: string;
+        objectId: string;
+        x: number;
+        y: number;
+        userId: string;
+    };
+}
+
+export interface ObjectDeletedMessage extends WebSocketMessage {
+    type: 'object_deleted';
+    payload: {
+        roomId: string;
+        objectId: string;
+        userId: string;
+    };
+}
+
+export interface CanvasStateSyncMessage extends WebSocketMessage {
+    type: 'canvas_state_sync';
+    payload: {
+        roomId: string;
+        objects: Array<{
+            id: string;
+            x: number;
+            y: number;
+            type: 'rectangle' | 'circle' | 'text';
+            color: string;
+            createdAt: number;
+            updatedAt: number;
+            userId?: string;
+            // Type-specific properties
+            width?: number;
+            height?: number;
+            radius?: number;
+            text?: string;
+            fontSize?: number;
+            fontFamily?: string;
+            fontStyle?: string;
+        }>;
+        timestamp: number;
+    };
+}
+
+export interface CanvasStateRequestedMessage extends WebSocketMessage {
+    type: 'canvas_state_requested';
+    payload: {
+        roomId: string;
+    };
+}
+
+// Union type for all object synchronization messages
+export type ObjectSyncMessage =
+    | ObjectCreatedMessage
+    | ObjectUpdatedMessage
+    | ObjectMovedMessage
+    | ObjectDeletedMessage
+    | CanvasStateSyncMessage
+    | CanvasStateRequestedMessage;
+
+// Object synchronization callback types
+export type ObjectCreatedCallback = (payload: ObjectCreatedMessage['payload']) => void;
+export type ObjectUpdatedCallback = (payload: ObjectUpdatedMessage['payload']) => void;
+export type ObjectMovedCallback = (payload: ObjectMovedMessage['payload']) => void;
+export type ObjectDeletedCallback = (payload: ObjectDeletedMessage['payload']) => void;
+export type CanvasStateSyncCallback = (payload: CanvasStateSyncMessage['payload']) => void;
 export type ConnectionStateCallback = (state: WebSocketConnectionState) => void;
 export type UserJoinedCallback = (payload: UserJoinedPayload) => void;
 export type UserLeftCallback = (payload: UserLeftPayload) => void;

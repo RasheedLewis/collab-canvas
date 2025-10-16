@@ -6,20 +6,18 @@ import { useCanvasStore } from '../../store/canvasStore';
 
 interface CanvasRectangleProps {
   rectangle: RectangleObject;
+  onMove: (objectId: string, x: number, y: number) => void;
 }
 
-const CanvasRectangle: React.FC<CanvasRectangleProps> = ({ rectangle }) => {
-  const { updateObject, selectObject, selectedObjectId } = useCanvasStore();
+const CanvasRectangle: React.FC<CanvasRectangleProps> = ({ rectangle, onMove }) => {
+  const { selectObject, selectedObjectId } = useCanvasStore();
   
   const isSelected = selectedObjectId === rectangle.id;
   
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true; // Prevent event from bubbling to Stage
     const node = e.target;
-    updateObject(rectangle.id, {
-      x: node.x(),
-      y: node.y(),
-    });
+    onMove(rectangle.id, node.x(), node.y());
   };
   
   const handleClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
