@@ -14,10 +14,10 @@ const Toolbar: React.FC = () => {
   ] as const;
 
   return (
-    <div className="toolbar fixed left-4 top-4 bottom-4 z-20 w-24">
-      <div className="flex flex-col h-full bg-white rounded-2xl shadow-xl border border-gray-200 p-3">
+    <div className="toolbar">
+      <div className="flex flex-col bg-white rounded-2xl shadow-xl border border-gray-200 p-3 max-h-[calc(100vh-8rem)] overflow-y-auto">
         {/* Tool Selection */}
-        <div className="flex flex-col space-y-2 flex-1">
+        <div className="flex flex-col space-y-2">
           <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-center mb-1">
             Tools
           </div>
@@ -48,7 +48,7 @@ const Toolbar: React.FC = () => {
               <span className="text-xs font-medium">{toolOption.name}</span>
               
               {/* Tooltip */}
-              <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-30">
+              <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-[60]">
                 {toolOption.description}
               </div>
             </button>
@@ -74,7 +74,7 @@ const Toolbar: React.FC = () => {
         )}
 
         {/* Canvas Actions */}
-        <div className="border-t border-gray-200 pt-3 mt-auto">
+        <div className="border-t border-gray-200 pt-3 mt-3">
           <button
             onClick={clearCanvas}
             className="w-full p-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200 border border-red-200 hover:border-red-300 flex flex-col items-center"

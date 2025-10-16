@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import Login from './components/Auth/Login';
 import UserProfile from './components/Auth/UserProfile';
 import Canvas from './components/Canvas/Canvas';
+import Toolbar from './components/Canvas/Toolbar';
 import './App.css';
 
 // Main application component (inside AuthProvider)
@@ -29,68 +30,61 @@ function AppContent() {
     );
   }
 
-  // User is authenticated - show main app
+  // User is authenticated - show main app with proper workspace container
   return (
-    <div className="h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">
-                CollabCanvas
-              </h1>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-3">
-                {user.photoURL && (
-                  <img
-                    src={user.photoURL}
-                    alt="Profile"
-                    className="h-8 w-8 rounded-full"
-                  />
-                )}
-                <div className="text-sm">
-                  <p className="text-gray-900 font-medium">
-                    {user.displayName || 'Anonymous User'}
-                  </p>
-                  <p className="text-gray-500">{user.email}</p>
-                </div>
-              </div>
-              
-              <button
-                onClick={() => setShowProfile(true)}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 
-                         text-sm leading-4 font-medium rounded-md text-gray-700 
-                         bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 
-                         focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Edit Profile
-              </button>
-              
-              <button
-                onClick={() => signOut()}
-                className="inline-flex items-center px-3 py-2 border border-transparent 
-                         text-sm leading-4 font-medium rounded-md text-gray-500 
-                         hover:text-gray-700 focus:outline-none focus:ring-2 
-                         focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Sign Out
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="workspace-container">
+      {/* Canvas fills the container */}
+      <Canvas />
 
-      {/* Main Canvas */}
-      <main className="flex-1">
-        <Canvas />
-      </main>
+      {/* Toolbar positioned absolutely within container */}
+      <Toolbar />
+
+      {/* User Profile positioned absolutely within container */}
+      <div className="user-profile-button">
+        <div className="flex items-center space-x-3 bg-white rounded-full shadow-lg border border-gray-200 px-4 py-2">
+          {user.photoURL && (
+            <img
+              src={user.photoURL}
+              alt="Profile"
+              className="h-8 w-8 rounded-full"
+            />
+          )}
+          <div className="text-sm">
+            <p className="text-gray-900 font-medium">
+              {user.displayName || 'Anonymous User'}
+            </p>
+          </div>
+          
+          <button
+            onClick={() => setShowProfile(true)}
+            className="inline-flex items-center p-2 text-gray-600 hover:text-gray-800 
+                     hover:bg-gray-100 rounded-full transition-colors duration-200"
+            title="Edit Profile"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+          
+          <button
+            onClick={() => signOut()}
+            className="inline-flex items-center p-2 text-gray-600 hover:text-red-600 
+                     hover:bg-red-50 rounded-full transition-colors duration-200"
+            title="Sign Out"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       {/* Profile Modal */}
       {showProfile && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4" style={{ zIndex: 10000 }}>
           <div className="max-w-md w-full max-h-[90vh] overflow-y-auto">
             <UserProfile 
               onClose={() => setShowProfile(false)}

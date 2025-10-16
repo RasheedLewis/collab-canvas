@@ -5,7 +5,6 @@ import GridBackground from './GridBackground';
 import CanvasRectangle from './CanvasRectangle';
 import CanvasCircle from './CanvasCircle';
 import CanvasText from './CanvasText';
-import Toolbar from './Toolbar';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import API from '../../lib/api';
@@ -18,8 +17,8 @@ interface CanvasProps {
 }
 
 const Canvas: React.FC<CanvasProps> = ({ 
-  width = window.innerWidth - 112, // Account for left toolbar (80px width + 32px margins)
-  height = window.innerHeight - 80 // Account for header height
+  width = window.innerWidth, // Full viewport width
+  height = window.innerHeight // Full viewport height
 }) => {
   const stageRef = useRef<Konva.Stage>(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
@@ -221,8 +220,8 @@ const Canvas: React.FC<CanvasProps> = ({
   useEffect(() => {
     const handleResize = () => {
       if (stageRef.current) {
-        stageRef.current.width(window.innerWidth - 112); // Account for toolbar
-        stageRef.current.height(window.innerHeight - 80);
+        stageRef.current.width(window.innerWidth); // Full viewport width
+        stageRef.current.height(window.innerHeight); // Full viewport height
       }
     };
 
@@ -601,16 +600,7 @@ const Canvas: React.FC<CanvasProps> = ({
   };
 
   return (
-    <div 
-      className="canvas-container relative overflow-hidden"
-      style={{ 
-        width: 'calc(100vw - 112px)', // Account for left toolbar
-        height: 'calc(100vh - 80px)', // Account for header
-        backgroundColor: '#f8f9fa',
-        cursor: 'grab',
-        marginLeft: '112px' // Push canvas right of toolbar
-      }}
-    >
+    <div className="canvas">
       <Stage
         ref={stageRef}
         width={width}
@@ -831,46 +821,6 @@ const Canvas: React.FC<CanvasProps> = ({
           })}
         </Layer>
       </Stage>
-      
-      {/* Toolbar */}
-      <Toolbar />
-      
-      {/* Debug info */}
-      <div className="absolute top-4 right-4 bg-white bg-opacity-90 rounded-lg p-3 shadow-lg text-sm font-mono">
-        <div>Scale: {stageScale.toFixed(2)}x</div>
-        <div>Position: ({stagePos.x.toFixed(0)}, {stagePos.y.toFixed(0)})</div>
-        <div>Objects: {objects.length}</div>
-        <div>Tool: {tool}</div>
-        {isCreating && <div className="text-blue-600">Creating...</div>}
-      </div>
-      
-      {/* Instructions panel */}
-      <div className="absolute bottom-4 right-4 bg-white bg-opacity-95 rounded-xl p-4 shadow-xl border border-gray-200 max-w-xs">
-        <div className="font-semibold mb-3 text-gray-800 flex items-center">
-          <span className="text-lg mr-2">💡</span>
-          Quick Guide
-        </div>
-        <div className="space-y-2 text-sm text-gray-600">
-          <div className="flex items-start space-x-2">
-            <span className="text-blue-600 font-medium">•</span>
-            <span>Mouse wheel to zoom (0.1x - 5x)</span>
-          </div>
-          <div className="flex items-start space-x-2">
-            <span className="text-blue-600 font-medium">•</span>
-            <span>{tool === 'select' ? 'Drag canvas to pan' : 'Select tool to drag canvas'}</span>
-          </div>
-          <div className="flex items-start space-x-2">
-            <span className="text-blue-600 font-medium">•</span>
-            <span>
-              {(tool === 'rectangle' || tool === 'circle') 
-                ? 'Drag to create shapes' 
-                : tool === 'text' 
-                ? 'Click to create text, double-click to edit' 
-                : 'Click objects to select and move'}
-            </span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

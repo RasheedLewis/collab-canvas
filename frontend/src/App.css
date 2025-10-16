@@ -1,8 +1,48 @@
+/* Workspace container fills the entire viewport */
+.workspace-container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  /* **Crucial** for positioning children absolutely */
+  overflow: hidden;
+  /* Prevent scrolling if children exceed bounds */
+}
+
+/* Canvas fills the container */
+.canvas {
+  width: 100%;
+  height: 100%;
+  background-color: #f8f9fa;
+  cursor: grab;
+}
+
+/* Toolbar positioned absolutely within container */
+.toolbar {
+  position: absolute;
+  /* **Crucial** to take it out of normal flow */
+  top: 16px;
+  /* 1rem = 16px */
+  left: 16px;
+  z-index: 10;
+  /* **Crucial** to ensure it's above the canvas */
+  width: 96px;
+  /* 24 * 0.25rem = 6rem = 96px */
+}
+
+/* User profile button positioned absolutely within container */
+.user-profile-button {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+}
+
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 .logo {
@@ -11,9 +51,11 @@
   will-change: filter;
   transition: filter 300ms;
 }
+
 .logo:hover {
   filter: drop-shadow(0 0 2em #646cffaa);
 }
+
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
@@ -22,6 +64,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
