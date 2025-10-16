@@ -1,0 +1,41 @@
+{
+  "roomId": "canvas-room-1",
+  "objects": [
+    {
+      "id": "1760581175992-i1envjjp1",
+      "x": 521,
+      "y": 236,
+      "type": "rectangle",
+      "color": "#3b82f6",
+      "createdAt": 1760581175994,
+      "updatedAt": 1760581706747,
+      "userId": "FKpkyztzjycmNB5R6hRHnTljU153",
+      "width": 90,
+      "height": 75
+    },
+    {
+      "id": "1760581194990-jav0ast5k",
+      "x": 320,
+      "y": 479,
+      "type": "circle",
+      "color": "#3b82f6",
+      "createdAt": 1760581194993,
+      "updatedAt": 1760581805058,
+      "userId": "FKpkyztzjycmNB5R6hRHnTljU153",
+      "radius": 206.69300907384363
+    },
+    {
+      "id": "1760581710401-e1tj0l692",
+      "x": 570,
+      "y": 656,
+      "type": "circle",
+      "color": "#ef4444",
+      "createdAt": 1760581710404,
+      "updatedAt": 1760581714571,
+      "userId": "tq1mOMOQbWZRwN4799yuOpmfyVI2",
+      "radius": 184.77283350103176
+    }
+  ],
+  "lastUpdated": 1760581805058,
+  "version": 25
+}

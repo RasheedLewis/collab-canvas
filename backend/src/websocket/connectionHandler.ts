@@ -10,6 +10,7 @@ import {
     SUPPORTED_MESSAGE_TYPES
 } from './messageProtocol';
 import SessionManager, { type ClientSession } from './sessionManager';
+import { canvasPersistence } from '../services/persistenceService';
 
 export interface Client {
     id: string;
@@ -476,7 +477,7 @@ export class WebSocketConnectionManager {
     }
 
     // Object synchronization message handlers
-    private handleObjectCreated(clientId: string, message: any, _context: any): void {
+    private async handleObjectCreated(clientId: string, message: any, _context: any): Promise<void> {
         const { roomId, object } = message.payload || {};
         const client = this.clients.get(clientId);
 
@@ -493,6 +494,16 @@ export class WebSocketConnectionManager {
             updatedAt: Date.now()
         };
 
+        try {
+            // Persist the object to storage
+            await canvasPersistence.createOrUpdateObject(roomId, objectWithUser);
+            console.log(`💾 Persisted object ${objectWithUser.id} in room ${roomId}`);
+        } catch (error) {
+            console.error(`❌ Failed to persist object ${objectWithUser.id}:`, error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to save object');
+            return;
+        }
+
         // Broadcast object creation to all users in the room (including sender)
         this.broadcastToRoom(roomId, {
             type: 'object_created',
@@ -505,7 +516,7 @@ export class WebSocketConnectionManager {
         });
     }
 
-    private handleObjectUpdated(clientId: string, message: any, _context: any): void {
+    private async handleObjectUpdated(clientId: string, message: any, _context: any): Promise<void> {
         const { roomId, objectId, updates } = message.payload || {};
         const client = this.clients.get(clientId);
 
@@ -520,6 +531,20 @@ export class WebSocketConnectionManager {
             updatedAt: Date.now()
         };
 
+        try {
+            // Persist the object update
+            const success = await canvasPersistence.updateObject(roomId, objectId, updatesWithTimestamp);
+            if (!success) {
+                this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, `Object ${objectId} not found`);
+                return;
+            }
+            console.log(`💾 Updated object ${objectId} in room ${roomId}`);
+        } catch (error) {
+            console.error(`❌ Failed to update object ${objectId}:`, error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to update object');
+            return;
+        }
+
         // Broadcast object update to all users in the room (including sender for confirmation)
         this.broadcastToRoom(roomId, {
             type: 'object_updated',
@@ -533,12 +558,30 @@ export class WebSocketConnectionManager {
         });
     }
 
-    private handleObjectMoved(clientId: string, message: any, _context: any): void {
+    private async handleObjectMoved(clientId: string, message: any, _context: any): Promise<void> {
         const { roomId, objectId, x, y } = message.payload || {};
         const client = this.clients.get(clientId);
 
         if (!client || !client.roomId || client.roomId !== roomId) {
             this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        try {
+            // Persist the object position update
+            const success = await canvasPersistence.updateObject(roomId, objectId, {
+                x,
+                y,
+                updatedAt: Date.now()
+            });
+            if (!success) {
+                this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, `Object ${objectId} not found`);
+                return;
+            }
+            console.log(`💾 Moved object ${objectId} to (${x}, ${y}) in room ${roomId}`);
+        } catch (error) {
+            console.error(`❌ Failed to move object ${objectId}:`, error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to move object');
             return;
         }
 
@@ -556,12 +599,26 @@ export class WebSocketConnectionManager {
         });
     }
 
-    private handleObjectDeleted(clientId: string, message: any, _context: any): void {
+    private async handleObjectDeleted(clientId: string, message: any, _context: any): Promise<void> {
         const { roomId, objectId } = message.payload || {};
         const client = this.clients.get(clientId);
 
         if (!client || !client.roomId || client.roomId !== roomId) {
             this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        try {
+            // Persist the object deletion
+            const success = await canvasPersistence.deleteObject(roomId, objectId);
+            if (!success) {
+                this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, `Object ${objectId} not found`);
+                return;
+            }
+            console.log(`💾 Deleted object ${objectId} from room ${roomId}`);
+        } catch (error) {
+            console.error(`❌ Failed to delete object ${objectId}:`, error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to delete object');
             return;
         }
 
@@ -577,7 +634,7 @@ export class WebSocketConnectionManager {
         });
     }
 
-    private handleCanvasStateRequested(clientId: string, message: any, _context: any): void {
+    private async handleCanvasStateRequested(clientId: string, message: any, _context: any): Promise<void> {
         const { roomId } = message.payload || {};
         const client = this.clients.get(clientId);
 
@@ -586,17 +643,26 @@ export class WebSocketConnectionManager {
             return;
         }
 
-        // For now, send an empty canvas state
-        // This will be enhanced when we add persistence in PR #7
-        this.sendToClient(clientId, {
-            type: 'canvas_state_sync',
-            payload: {
-                roomId,
-                objects: [], // TODO: Load from persistence layer
+        try {
+            // Load canvas state from persistence layer
+            const canvasState = await canvasPersistence.getCanvasState(roomId);
+            const objects = canvasState ? canvasState.objects : [];
+
+            console.log(`📤 Sending canvas state for room ${roomId}: ${objects.length} objects`);
+
+            this.sendToClient(clientId, {
+                type: 'canvas_state_sync',
+                payload: {
+                    roomId,
+                    objects,
+                    timestamp: Date.now()
+                },
                 timestamp: Date.now()
-            },
-            timestamp: Date.now()
-        });
+            });
+        } catch (error) {
+            console.error(`❌ Failed to load canvas state for room ${roomId}:`, error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to load canvas state');
+        }
     }
 
     private handleDisconnect(clientId: string, disconnectCode?: number, disconnectReason?: string): void {
@@ -822,7 +888,7 @@ export class WebSocketConnectionManager {
     }
 
     // Cleanup method
-    public shutdown(): void {
+    public async shutdown(): Promise<void> {
         console.log('🛑 Shutting down WebSocket Connection Manager...');
 
         if (this.heartbeatInterval) {
@@ -842,6 +908,13 @@ export class WebSocketConnectionManager {
 
         // Shutdown session manager
         this.sessionManager.shutdown();
+
+        // Shutdown persistence service (save all pending changes)
+        try {
+            await canvasPersistence.shutdown();
+        } catch (error) {
+            console.error('❌ Error shutting down persistence service:', error);
+        }
 
         // Clear data structures
         this.clients.clear();

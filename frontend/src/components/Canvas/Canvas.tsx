@@ -49,7 +49,8 @@ const Canvas: React.FC<CanvasProps> = ({
     selectObject,
     addObject,
     updateObject,
-    deleteObject
+    deleteObject,
+    clearCanvas
   } = useCanvasStore();
 
   // WebSocket connection for real-time collaboration
@@ -64,6 +65,7 @@ const Canvas: React.FC<CanvasProps> = ({
     roomId,
     sendMessage,
     joinRoom,
+    onMessage,
     onCursorMoved,
     onCursorUpdate,
     onCursorLeft,
@@ -470,6 +472,21 @@ const Canvas: React.FC<CanvasProps> = ({
     });
   }, [isConnected, roomId, sendMessage]);
 
+  // Request canvas state function
+  const requestCanvasState = useCallback(() => {
+    if (!isConnected || !roomId) {
+      console.log('⚠️ Cannot request canvas state: not connected or no room');
+      return;
+    }
+    
+    console.log(`📥 Requesting canvas state for room: ${roomId}`);
+    sendMessage({
+      type: 'canvas_state_requested',
+      payload: { roomId },
+      timestamp: Date.now()
+    });
+  }, [isConnected, roomId, sendMessage]);
+
   // TODO: Implement these functions when adding object updates/deletions
   // const sendObjectUpdated = useCallback((objectId: string, updates: Partial<CanvasObject>) => { ... };
   // const sendObjectDeleted = useCallback((objectId: string) => { ... };
@@ -505,7 +522,12 @@ const Canvas: React.FC<CanvasProps> = ({
     });
 
     const unsubscribeCanvasStateSync = onCanvasStateSync((payload) => {
-      // Replace all objects with synced state
+      console.log(`📥 Received canvas state: ${payload.objects.length} objects`);
+      
+      // Clear existing objects first (important for page refreshes)
+      clearCanvas();
+      
+      // Add all objects from synced state
       payload.objects.forEach(object => {
         addObject(object as CanvasObject);
       });
@@ -518,7 +540,36 @@ const Canvas: React.FC<CanvasProps> = ({
       unsubscribeObjectDeleted();
       unsubscribeCanvasStateSync();
     };
-  }, [onObjectCreated, onObjectMoved, onObjectUpdated, onObjectDeleted, onCanvasStateSync, clientId, addObject, updateObject, deleteObject]);
+  }, [onObjectCreated, onObjectMoved, onObjectUpdated, onObjectDeleted, onCanvasStateSync, clientId, addObject, updateObject, deleteObject, clearCanvas]);
+
+  // Listen for room join events and request canvas state
+  useEffect(() => {
+    const unsubscribeMessage = onMessage((message) => {
+      if (message.type === 'room_joined') {
+        console.log(`🏠 Successfully joined room, requesting canvas state...`);
+        // Small delay to ensure the server is ready
+        setTimeout(() => {
+          requestCanvasState();
+        }, 100);
+      }
+    });
+
+    return () => {
+      unsubscribeMessage();
+    };
+  }, [onMessage, requestCanvasState]);
+
+  // Backup mechanism: Request canvas state when room ID changes and we're connected
+  // This handles cases where room_joined message might be missed or on reconnection
+  useEffect(() => {
+    if (isConnected && roomId) {
+      console.log(`🔄 Room ID changed to ${roomId}, requesting canvas state...`);
+      // Small delay to ensure the server has processed the room join
+      setTimeout(() => {
+        requestCanvasState();
+      }, 200);
+    }
+  }, [roomId, isConnected, requestCanvasState]);
 
   // Wrapper functions for object creation with broadcasting
   const createRectangleWithSync = useCallback((x: number, y: number, width?: number, height?: number) => {
