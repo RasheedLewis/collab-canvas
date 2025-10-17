@@ -41,21 +41,57 @@ export default function GoogleAuth({
     <button
       onClick={handleGoogleSignIn}
       disabled={disabled || isLoading}
-      className={`
-        flex items-center justify-center gap-3 w-full px-4 py-3 
-        bg-white border border-gray-300 rounded-lg shadow-sm
-        hover:bg-gray-50 hover:shadow-md 
-        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-        disabled:opacity-50 disabled:cursor-not-allowed
-        transition-all duration-200 font-medium text-gray-700
-        ${className}
-      `}
       type="button"
       data-testid="google-auth-button"
+      style={{
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '12px',
+        padding: '14px 20px',
+        fontSize: '14px',
+        fontWeight: '600',
+        color: '#374151',
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        border: '1px solid rgba(209, 213, 219, 0.4)',
+        borderRadius: '12px',
+        cursor: disabled || isLoading ? 'not-allowed' : 'pointer',
+        opacity: disabled || isLoading ? 0.6 : 1,
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+        transition: 'all 0.2s ease',
+        outline: 'none'
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled && !isLoading) {
+          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 1)';
+          e.currentTarget.style.transform = 'translateY(-1px)';
+          e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.15)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!disabled && !isLoading) {
+          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
+        }
+      }}
+      onFocus={(e) => {
+        if (!disabled && !isLoading) {
+          e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.25)';
+        }
+      }}
+      onBlur={(e) => {
+        if (!disabled && !isLoading) {
+          e.currentTarget.style.borderColor = 'rgba(209, 213, 219, 0.4)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
+        }
+      }}
     >
       {/* Google Logo SVG */}
       <svg
-        className="w-5 h-5"
+        style={{ width: '20px', height: '20px' }}
         viewBox="0 0 24 24"
         xmlns="http://www.w3.org/2000/svg"
       >
@@ -78,10 +114,31 @@ export default function GoogleAuth({
       </svg>
       
       {isLoading ? (
-        <span className="flex items-center gap-2">
-          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <svg 
+            style={{ 
+              width: '16px', 
+              height: '16px', 
+              color: '#374151',
+              animation: 'spin 1s linear infinite'
+            }} 
+            xmlns="http://www.w3.org/2000/svg" 
+            fill="none" 
+            viewBox="0 0 24 24"
+          >
+            <circle 
+              style={{ opacity: 0.25 }} 
+              cx="12" 
+              cy="12" 
+              r="10" 
+              stroke="currentColor" 
+              strokeWidth="4"
+            />
+            <path 
+              style={{ opacity: 0.75 }} 
+              fill="currentColor" 
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
           </svg>
           Signing in with Google...
         </span>

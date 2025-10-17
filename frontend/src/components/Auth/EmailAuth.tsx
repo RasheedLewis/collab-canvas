@@ -73,11 +73,20 @@ export default function EmailAuth({
   };
 
   return (
-    <div className={`w-full ${className}`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <div style={{ width: '100%' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {mode === 'signup' && (
           <div>
-            <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-1">
+            <label 
+              htmlFor="displayName" 
+              style={{
+                display: 'block',
+                fontSize: '13px',
+                fontWeight: '600',
+                color: '#374151',
+                marginBottom: '6px'
+              }}
+            >
               Display Name
             </label>
             <input
@@ -87,17 +96,51 @@ export default function EmailAuth({
               value={formData.displayName}
               onChange={handleInputChange}
               disabled={disabled || isLoading}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm 
-                       focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-                       disabled:opacity-50 disabled:cursor-not-allowed"
               placeholder="Enter your display name"
               data-testid="displayname-input"
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151',
+                backgroundColor: 'rgba(249, 250, 251, 0.8)',
+                border: '1px solid rgba(209, 213, 219, 0.4)',
+                borderRadius: '10px',
+                outline: 'none',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+                transition: 'all 0.2s ease',
+                opacity: disabled || isLoading ? 0.6 : 1,
+                cursor: disabled || isLoading ? 'not-allowed' : 'text',
+                boxSizing: 'border-box'
+              }}
+              onFocus={(e) => {
+                if (!disabled && !isLoading) {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+                  e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.15)';
+                }
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(249, 250, 251, 0.8)';
+                e.currentTarget.style.borderColor = 'rgba(209, 213, 219, 0.4)';
+                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.05)';
+              }}
             />
           </div>
         )}
         
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+          <label 
+            htmlFor="email" 
+            style={{
+              display: 'block',
+              fontSize: '13px',
+              fontWeight: '600',
+              color: '#374151',
+              marginBottom: '6px'
+            }}
+          >
             Email Address
           </label>
           <input
@@ -107,16 +150,50 @@ export default function EmailAuth({
             value={formData.email}
             onChange={handleInputChange}
             disabled={disabled || isLoading}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm 
-                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-                     disabled:opacity-50 disabled:cursor-not-allowed"
             placeholder="Enter your email"
             data-testid="email-input"
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#374151',
+              backgroundColor: 'rgba(249, 250, 251, 0.8)',
+              border: '1px solid rgba(209, 213, 219, 0.4)',
+              borderRadius: '10px',
+              outline: 'none',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+              transition: 'all 0.2s ease',
+              opacity: disabled || isLoading ? 0.6 : 1,
+              cursor: disabled || isLoading ? 'not-allowed' : 'text',
+              boxSizing: 'border-box'
+            }}
+            onFocus={(e) => {
+              if (!disabled && !isLoading) {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+                e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.15)';
+              }
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(249, 250, 251, 0.8)';
+              e.currentTarget.style.borderColor = 'rgba(209, 213, 219, 0.4)';
+              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.05)';
+            }}
           />
         </div>
         
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+          <label 
+            htmlFor="password" 
+            style={{
+              display: 'block',
+              fontSize: '13px',
+              fontWeight: '600',
+              color: '#374151',
+              marginBottom: '6px'
+            }}
+          >
             Password
           </label>
           <input
@@ -126,31 +203,103 @@ export default function EmailAuth({
             value={formData.password}
             onChange={handleInputChange}
             disabled={disabled || isLoading}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm 
-                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-                     disabled:opacity-50 disabled:cursor-not-allowed"
             placeholder="Enter your password"
             minLength={6}
             data-testid="password-input"
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#374151',
+              backgroundColor: 'rgba(249, 250, 251, 0.8)',
+              border: '1px solid rgba(209, 213, 219, 0.4)',
+              borderRadius: '10px',
+              outline: 'none',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+              transition: 'all 0.2s ease',
+              opacity: disabled || isLoading ? 0.6 : 1,
+              cursor: disabled || isLoading ? 'not-allowed' : 'text',
+              boxSizing: 'border-box'
+            }}
+            onFocus={(e) => {
+              if (!disabled && !isLoading) {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+                e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.15)';
+              }
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(249, 250, 251, 0.8)';
+              e.currentTarget.style.borderColor = 'rgba(209, 213, 219, 0.4)';
+              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.05)';
+            }}
           />
         </div>
         
         <button
           type="submit"
           disabled={disabled || isLoading}
-          className="w-full flex items-center justify-center px-4 py-3 
-                   bg-blue-600 hover:bg-blue-700 text-white font-medium 
-                   rounded-lg shadow-sm focus:outline-none focus:ring-2 
-                   focus:ring-blue-500 focus:ring-offset-2
-                   disabled:opacity-50 disabled:cursor-not-allowed
-                   transition-colors duration-200"
           data-testid="login-button"
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '14px 20px',
+            fontSize: '14px',
+            fontWeight: '600',
+            color: 'white',
+            backgroundColor: disabled || isLoading ? 'rgba(156, 163, 175, 0.6)' : 'rgba(59, 130, 246, 0.9)',
+            border: 'none',
+            borderRadius: '10px',
+            cursor: disabled || isLoading ? 'not-allowed' : 'pointer',
+            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.25)',
+            transition: 'all 0.2s ease',
+            outline: 'none',
+            marginTop: '8px'
+          }}
+          onMouseEnter={(e) => {
+            if (!disabled && !isLoading) {
+              e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 1)';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.4)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!disabled && !isLoading) {
+              e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.9)';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.25)';
+            }
+          }}
         >
           {isLoading ? (
-            <span className="flex items-center gap-2">
-              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg 
+                style={{ 
+                  width: '16px', 
+                  height: '16px', 
+                  color: 'white',
+                  animation: 'spin 1s linear infinite'
+                }} 
+                xmlns="http://www.w3.org/2000/svg" 
+                fill="none" 
+                viewBox="0 0 24 24"
+              >
+                <circle 
+                  style={{ opacity: 0.25 }} 
+                  cx="12" 
+                  cy="12" 
+                  r="10" 
+                  stroke="currentColor" 
+                  strokeWidth="4"
+                />
+                <path 
+                  style={{ opacity: 0.75 }} 
+                  fill="currentColor" 
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
               </svg>
               {mode === 'signin' ? 'Signing In...' : 'Creating Account...'}
             </span>
@@ -161,12 +310,34 @@ export default function EmailAuth({
       </form>
       
       {onToggleMode && (
-        <div className="mt-4 text-center">
+        <div style={{ marginTop: '16px', textAlign: 'center' }}>
           <button
             type="button"
             onClick={onToggleMode}
             disabled={disabled || isLoading}
-            className="text-sm text-blue-600 hover:text-blue-500 disabled:opacity-50"
+            style={{
+              fontSize: '13px',
+              color: '#3B82F6',
+              backgroundColor: 'transparent',
+              border: 'none',
+              cursor: disabled || isLoading ? 'not-allowed' : 'pointer',
+              opacity: disabled || isLoading ? 0.5 : 1,
+              padding: '4px 8px',
+              borderRadius: '6px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!disabled && !isLoading) {
+                e.currentTarget.style.color = '#2563EB';
+                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!disabled && !isLoading) {
+                e.currentTarget.style.color = '#3B82F6';
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }
+            }}
           >
             {mode === 'signin' 
               ? "Don't have an account? Create one" 

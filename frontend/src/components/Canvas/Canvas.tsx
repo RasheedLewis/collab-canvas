@@ -5,6 +5,8 @@ import GridBackground from './GridBackground';
 import CanvasRectangle from './CanvasRectangle';
 import CanvasCircle from './CanvasCircle';
 import CanvasText from './CanvasText';
+import ActiveUsers from './ActiveUsers';
+import SettingsButton from './SettingsButton';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { useAuthUser, useAuthUserProfile } from '../../store/authStore';
@@ -782,8 +784,56 @@ const Canvas: React.FC<CanvasProps> = ({
     setPreviewShape(null);
   };
 
+  // Prepare current user info for ActiveUsers component
+  const currentUserInfo = user && userProfile ? {
+    uid: user.uid,
+    email: user.email,
+    name: user.displayName,
+    picture: user.photoURL,
+    displayName: userProfile.displayName || undefined,
+    avatarColor: userProfile.avatarColor
+  } : undefined;
+
+  // Map other cursors to ActiveUsers format
+  const otherActiveUsers = Array.from(otherCursors.values()).map(cursor => ({
+    userId: cursor.userId,
+    userInfo: cursor.userInfo,
+    isCurrentUser: false
+  }));
+
   return (
-    <div className="canvas">
+    <div className="canvas relative">
+      {/* Active Users Display */}
+      <div 
+        style={{ 
+          position: 'absolute',
+          top: '20px',
+          right: '20px', // Positioned at the top right with consistent spacing
+          zIndex: 50,
+          width: '320px', // Exact component width
+          height: '112px', // Exact component height
+          pointerEvents: 'auto'
+        }}
+      >
+        <ActiveUsers
+          currentUser={currentUserInfo}
+          otherUsers={otherActiveUsers}
+        />
+      </div>
+
+      {/* Settings Button */}
+      <div 
+        style={{ 
+          position: 'absolute',
+          bottom: '20px',
+          left: '20px',
+          zIndex: 50,
+          pointerEvents: 'auto'
+        }}
+      >
+        <SettingsButton />
+      </div>
+
       <Stage
         ref={stageRef}
         width={width}

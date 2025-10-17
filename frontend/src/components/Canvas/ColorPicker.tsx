@@ -1,5 +1,5 @@
 import React from 'react';
-import { COLOR_PALETTE, COLOR_NAMES, type PaletteColor } from '../../types/canvas';
+import { COLOR_PALETTE, COLOR_NAMES } from '../../types/canvas';
 import { useCanvasStore } from '../../store/canvasStore';
 
 interface ColorPickerProps {
@@ -11,51 +11,69 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ className = '' }) => {
 
   return (
     <div className={`color-picker ${className}`}>
-      <div className="space-y-3">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {/* Header */}
+        <div 
+          className="text-center"
+          style={{
+            fontSize: '13px',
+            fontWeight: '600',
+            color: '#374151',
+            letterSpacing: '0.025em',
+            textTransform: 'uppercase'
+          }}
+        >
           Colors
         </div>
         
-        {/* Current color display */}
-        <div className="flex flex-col items-center space-y-2">
-          <div
-            className="w-12 h-12 rounded-xl border-2 border-gray-300 shadow-sm"
-            style={{ backgroundColor: activeColor }}
-          />
-          <span className="text-xs font-medium text-gray-600 text-center">
-            {COLOR_NAMES[activeColor as PaletteColor] || activeColor}
-          </span>
-        </div>
         
-        {/* Color grid */}
-        <div className="grid grid-cols-3 gap-1">
+        {/* Color grid - 2 columns */}
+        <div 
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '8px',
+            padding: '8px',
+            backgroundColor: 'rgba(249, 250, 251, 0.5)',
+            borderRadius: '12px'
+          }}
+        >
           {COLOR_PALETTE.map((color) => (
             <button
               key={color}
-              className={`
-                w-full h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110 hover:shadow-md group relative
-                ${activeColor === color 
-                  ? 'border-gray-700 shadow-lg scale-110 ring-2 ring-blue-200' 
-                  : 'border-gray-300 hover:border-gray-600'
+              className="group relative transition-all duration-200"
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                backgroundColor: color,
+                border: activeColor === color 
+                  ? '3px solid rgba(59, 130, 246, 0.8)' 
+                  : '2px solid rgba(255, 255, 255, 0.8)',
+                boxShadow: activeColor === color 
+                  ? '0 4px 12px rgba(59, 130, 246, 0.25), 0 0 0 2px rgba(59, 130, 246, 0.1)' 
+                  : '0 2px 6px rgba(0, 0, 0, 0.1)',
+                transform: activeColor === color ? 'scale(1.1)' : 'scale(1)',
+                cursor: 'pointer',
+                justifySelf: 'center'
+              }}
+              onMouseEnter={(e) => {
+                if (activeColor !== color) {
+                  e.currentTarget.style.transform = 'scale(1.15)';
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.2)';
                 }
-              `}
-              style={{ backgroundColor: color }}
+              }}
+              onMouseLeave={(e) => {
+                if (activeColor !== color) {
+                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.1)';
+                }
+              }}
               onClick={() => setActiveColor(color)}
               title={`Select ${COLOR_NAMES[color]}`}
               aria-label={`Select ${COLOR_NAMES[color]} color`}
             >
-              {activeColor === color && (
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className={`w-2 h-2 rounded-full shadow-sm ${
-                    color === '#ffffff' || color === '#f59e0b' ? 'bg-gray-800' : 'bg-white'
-                  }`} />
-                </div>
-              )}
-              
-              {/* Tooltip */}
-              <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-30">
-                {COLOR_NAMES[color]}
-              </div>
+              {/* No content inside - clean circles only */}
             </button>
           ))}
         </div>

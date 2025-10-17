@@ -12,23 +12,49 @@ const FontSizeSelector: React.FC<FontSizeSelectorProps> = ({ className = '' }) =
 
   return (
     <div className={`font-size-selector ${className}`}>
-      <div className="space-y-3">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {/* Header */}
+        <div 
+          style={{
+            fontSize: '13px',
+            fontWeight: '600',
+            color: '#374151',
+            letterSpacing: '0.025em',
+            textTransform: 'uppercase',
+            textAlign: 'center'
+          }}
+        >
           Font Size
-        </div>
-        
-        {/* Current font size display */}
-        <div className="text-center">
-          <div className="text-lg font-bold text-gray-800">
-            {activeFontSize}px
-          </div>
         </div>
         
         {/* Font size selector */}
         <select
           value={activeFontSize}
           onChange={(e) => setActiveFontSize(Number(e.target.value))}
-          className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+          style={{
+            width: '100%',
+            padding: '8px 12px',
+            fontSize: '13px',
+            fontWeight: '500',
+            color: '#374151',
+            backgroundColor: 'rgba(249, 250, 251, 0.8)',
+            border: '1px solid rgba(209, 213, 219, 0.3)',
+            borderRadius: '8px',
+            outline: 'none',
+            cursor: 'pointer',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+            transition: 'all 0.2s ease'
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+            e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.15)';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(249, 250, 251, 0.8)';
+            e.currentTarget.style.borderColor = 'rgba(209, 213, 219, 0.3)';
+            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.05)';
+          }}
         >
           {FONT_SIZES.map((size) => (
             <option key={size} value={size}>
@@ -36,21 +62,6 @@ const FontSizeSelector: React.FC<FontSizeSelectorProps> = ({ className = '' }) =
             </option>
           ))}
         </select>
-        
-        {/* Custom size input */}
-        <input
-          type="number"
-          value={activeFontSize}
-          onChange={(e) => {
-            const size = Math.max(6, Math.min(200, Number(e.target.value) || 16));
-            setActiveFontSize(size);
-          }}
-          className="w-full px-2 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          min="6"
-          max="200"
-          step="1"
-          placeholder="Custom size"
-        />
       </div>
     </div>
   );

@@ -20,22 +20,14 @@
 .toolbar {
   position: absolute;
   /* **Crucial** to take it out of normal flow */
-  top: 16px;
-  /* 1rem = 16px */
-  left: 16px;
+  top: 20px;
+  left: 20px;
   z-index: 10;
   /* **Crucial** to ensure it's above the canvas */
   width: 96px;
   /* 24 * 0.25rem = 6rem = 96px */
 }
 
-/* User profile button positioned absolutely within container */
-.user-profile-button {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 10;
-}
 
 #root {
   width: 100vw;
