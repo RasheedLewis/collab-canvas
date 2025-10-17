@@ -7,6 +7,7 @@ import CanvasCircle from './CanvasCircle';
 import CanvasText from './CanvasText';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useWebSocket } from '../../hooks/useWebSocket';
+import { useAuthUser, useAuthUserProfile } from '../../store/authStore';
 import API from '../../lib/api';
 import type { RectangleObject, CircleObject, TextObject, CanvasObject } from '../../types/canvas';
 import type { 
@@ -52,6 +53,10 @@ const Canvas: React.FC<CanvasProps> = ({
     deleteObject,
     clearCanvas
   } = useCanvasStore();
+
+  // Get authenticated user and profile data
+  const user = useAuthUser();
+  const userProfile = useAuthUserProfile();
 
   // WebSocket connection for real-time collaboration
   const ws = useWebSocket({
@@ -162,18 +167,20 @@ const Canvas: React.FC<CanvasProps> = ({
       // Join a test room with user info
       const testRoomId = 'canvas-room-1';
       const randomId = Math.random().toString(36).substring(2, 8);
+      
+      // Use actual user profile data if available, otherwise fallback to generated data
       const userInfo = {
-        uid: clientId || 'anonymous',
-        email: null,
-        name: `User_${randomId}`,
-        picture: null,
-        displayName: `User_${randomId}`,
-        avatarColor: getColorForUser(clientId || randomId)
+        uid: user?.uid || clientId || 'anonymous',
+        email: user?.email || null,
+        name: user?.displayName || userProfile?.displayName || `User_${randomId}`,
+        picture: user?.photoURL || null,
+        displayName: userProfile?.displayName || user?.displayName || `User_${randomId}`,
+        avatarColor: userProfile?.avatarColor || getColorForUser(user?.uid || clientId || randomId)
       };
       
       joinRoom(testRoomId, userInfo);
     }
-  }, [isConnected, roomId, clientId, joinRoom]);
+  }, [isConnected, roomId, clientId, joinRoom, user, userProfile]);
 
   // Smooth interpolation functions
   const easeOutQuad = (t: number): number => t * (2 - t);
