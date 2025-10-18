@@ -2,6 +2,7 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import Login from './components/Auth/Login';
 import Canvas from './components/Canvas/Canvas';
 import Toolbar from './components/Canvas/Toolbar';
+import { useCanvasStore } from './store/canvasStore';
 import './App.css';
 
 // Main application component (inside AuthProvider)
@@ -114,9 +115,21 @@ function AppContent() {
       <Canvas />
 
       {/* Toolbar positioned absolutely within container */}
-      <Toolbar />
+      <ToolbarWithDeleteHandler />
     </div>
   );
+}
+
+// Separate component to handle delete functionality with access to WebSocket
+function ToolbarWithDeleteHandler() {
+  const { selectedObjectId } = useCanvasStore();
+
+  // We'll pass a simple handler that just calls the Canvas component's delete function
+  return <Toolbar onDeleteSelected={selectedObjectId ? () => {
+    // Trigger keyboard delete event to use the Canvas component's delete logic
+    const deleteEvent = new KeyboardEvent('keydown', { key: 'Delete' });
+    window.dispatchEvent(deleteEvent);
+  } : undefined} />;
 }
 
 // Root App component with AuthProvider

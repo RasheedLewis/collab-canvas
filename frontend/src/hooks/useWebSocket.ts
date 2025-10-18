@@ -30,7 +30,8 @@ import type {
     ObjectResizedCallback,
     ObjectRotatedCallback,
     TextChangedCallback,
-    CanvasStateSyncCallback
+    CanvasStateSyncCallback,
+    CanvasClearedCallback
 } from '../types/websocket';
 
 // Default configuration
@@ -82,6 +83,7 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
     const objectRotatedListenersRef = useRef<Set<ObjectRotatedCallback>>(new Set());
     const textChangedListenersRef = useRef<Set<TextChangedCallback>>(new Set());
     const canvasStateSyncListenersRef = useRef<Set<CanvasStateSyncCallback>>(new Set());
+    const canvasClearedListenersRef = useRef<Set<CanvasClearedCallback>>(new Set());
 
     // Utility function to emit to all listeners
     const emitToListeners = useCallback(<T>(listeners: Set<(payload: T) => void>, payload: T) => {
@@ -247,6 +249,7 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
                 }
 
                 case 'object_deleted': {
+                    console.log('🗑️ WebSocket received object_deleted message:', message.payload);
                     emitToListeners(objectDeletedListenersRef.current, message.payload);
                     break;
                 }
@@ -269,6 +272,12 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
 
                 case 'canvas_state_sync': {
                     emitToListeners(canvasStateSyncListenersRef.current, message.payload);
+                    break;
+                }
+
+                case 'canvas_cleared': {
+                    console.log('🧹 WebSocket received canvas_cleared message:', message.payload);
+                    emitToListeners(canvasClearedListenersRef.current, message.payload);
                     break;
                 }
 
@@ -578,6 +587,11 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         return () => canvasStateSyncListenersRef.current.delete(callback);
     }, []);
 
+    const onCanvasCleared = useCallback((callback: CanvasClearedCallback) => {
+        canvasClearedListenersRef.current.add(callback);
+        return () => canvasClearedListenersRef.current.delete(callback);
+    }, []);
+
     // Cleanup on unmount
     useEffect(() => {
         return () => {
@@ -631,6 +645,7 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         onObjectRotated,
         onTextChanged,
         onCanvasStateSync,
+        onCanvasCleared,
 
         // Connection info
         lastError,

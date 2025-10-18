@@ -412,6 +412,14 @@ export interface CanvasStateRequestedMessage extends WebSocketMessage {
 }
 
 // Union type for all object synchronization messages
+export interface CanvasClearedMessage extends WebSocketMessage {
+    type: 'canvas_cleared';
+    payload: {
+        roomId: string;
+        userId: string;
+    };
+}
+
 export type ObjectSyncMessage =
     | ObjectCreatedMessage
     | ObjectUpdatedMessage
@@ -421,7 +429,8 @@ export type ObjectSyncMessage =
     | ObjectRotatedMessage
     | TextChangedMessage
     | CanvasStateSyncMessage
-    | CanvasStateRequestedMessage;
+    | CanvasStateRequestedMessage
+    | CanvasClearedMessage;
 
 // Object synchronization callback types
 export type ObjectCreatedCallback = (payload: ObjectCreatedMessage['payload']) => void;
@@ -432,6 +441,7 @@ export type TextChangedCallback = (payload: TextChangedMessage['payload']) => vo
 export type ObjectResizedCallback = (payload: ObjectResizedMessage['payload']) => void;
 export type ObjectRotatedCallback = (payload: ObjectRotatedMessage['payload']) => void;
 export type CanvasStateSyncCallback = (payload: CanvasStateSyncMessage['payload']) => void;
+export type CanvasClearedCallback = (payload: CanvasClearedMessage['payload']) => void;
 export type ConnectionStateCallback = (state: WebSocketConnectionState) => void;
 export type UserJoinedCallback = (payload: UserJoinedPayload) => void;
 export type UserLeftCallback = (payload: UserLeftPayload) => void;
@@ -476,4 +486,5 @@ export interface WebSocketHookReturn {
     onObjectRotated: (callback: ObjectRotatedCallback) => () => void;
     onTextChanged: (callback: TextChangedCallback) => () => void;
     onCanvasStateSync: (callback: CanvasStateSyncCallback) => () => void;
+    onCanvasCleared: (callback: CanvasClearedCallback) => () => void;
 }

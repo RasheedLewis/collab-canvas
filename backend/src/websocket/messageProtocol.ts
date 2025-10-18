@@ -95,7 +95,8 @@ export const SUPPORTED_MESSAGE_TYPES = [
     'object_rotated',
     'text_changed',
     'canvas_state_requested',
-    'canvas_state_sync'
+    'canvas_state_sync',
+    'canvas_cleared'
 ] as const;
 
 export type MessageType = typeof SUPPORTED_MESSAGE_TYPES[number];
@@ -255,6 +256,13 @@ export const ClientMessageSchemas = {
 
     canvas_state_requested: BaseMessageSchema.extend({
         type: z.literal('canvas_state_requested'),
+        payload: z.object({
+            roomId: z.string(),
+        }),
+    }),
+
+    canvas_cleared: BaseMessageSchema.extend({
+        type: z.literal('canvas_cleared'),
         payload: z.object({
             roomId: z.string(),
         }),
@@ -483,6 +491,14 @@ export const ServerMessageSchemas = {
             roomId: z.string(),
             objects: z.array(CanvasObjectSchema),
             timestamp: z.number(),
+        }),
+    }),
+
+    canvas_cleared: BaseMessageSchema.extend({
+        type: z.literal('canvas_cleared'),
+        payload: z.object({
+            roomId: z.string(),
+            userId: z.string(), // User who cleared the canvas
         }),
     }),
 };

@@ -1,10 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useCanvasStore } from '../../store/canvasStore';
 import ColorPicker from './ColorPicker';
 import FontSizeSelector from './FontSizeSelector';
 
-const Toolbar: React.FC = () => {
-  const { tool, setTool, objects, clearCanvas } = useCanvasStore();
+interface ToolbarProps {
+  onDeleteSelected?: () => void;
+}
+
+const Toolbar: React.FC<ToolbarProps> = ({ onDeleteSelected }) => {
+  const { tool, setTool, objects, selectedObjectId } = useCanvasStore();
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+
+  // Close overflow menu when clicking outside
+  const handleClickOutside = () => {
+    if (showOverflowMenu) {
+      setShowOverflowMenu(false);
+    }
+  };
 
   const tools = [
     { id: 'select', name: 'Select', icon: '↖️', description: 'Select and move objects' },
@@ -28,6 +40,7 @@ const Toolbar: React.FC = () => {
           alignItems: 'center',
           width: '96px'
         }}
+        onClick={handleClickOutside}
       >
         {/* Tool Selection */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', width: '100%' }}>
@@ -131,40 +144,138 @@ const Toolbar: React.FC = () => {
             width: '100%',
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center'
+            alignItems: 'center',
+            gap: '8px'
           }}
         >
-          <button
-            onClick={clearCanvas}
-            className="transition-all duration-200"
-            style={{
-              padding: '8px',
-              fontSize: '14px',
-              fontWeight: '600',
-              color: '#dc2626',
-              backgroundColor: 'rgba(254, 242, 242, 0.8)',
-              border: '1px solid rgba(248, 113, 113, 0.3)',
-              borderRadius: '8px',
-              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-              width: '64px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(254, 226, 226, 0.9)';
-              e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.5)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(254, 242, 242, 0.8)';
-              e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.3)';
-            }}
-            title="Clear canvas"
-          >
-            <span style={{ fontSize: '18px', marginBottom: '2px' }}>🗑️</span>
-            <span style={{ fontSize: '11px' }}>Clear</span>
+          {/* Delete Selected Object Button */}
+          {selectedObjectId && onDeleteSelected && (
+            <button
+              onClick={onDeleteSelected}
+              className="transition-all duration-200"
+              title="Delete selected object (Del)"
+              style={{
+                padding: '8px',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#b91c1c',
+                backgroundColor: 'rgba(255, 241, 242, 0.9)',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(220, 38, 38, 0.1)',
+                width: '64px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(254, 226, 226, 1)';
+                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.6)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 4px 8px rgba(220, 38, 38, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 241, 242, 0.9)';
+                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 4px rgba(220, 38, 38, 0.1)';
+              }}
+            >
+              ❌
+              <span style={{ fontSize: '10px', marginTop: '2px' }}>Delete</span>
+            </button>
+          )}
+          
+          {/* Overflow Menu Button */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowOverflowMenu(!showOverflowMenu)}
+              className="transition-all duration-200"
+              title="More actions"
+              style={{
+                padding: '8px',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#6B7280',
+                backgroundColor: 'rgba(249, 250, 251, 0.8)',
+                border: '1px solid rgba(209, 213, 219, 0.3)',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+                width: '64px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(243, 244, 246, 1)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(249, 250, 251, 0.8)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.05)';
+              }}
+            >
+              ⋯
+              <span style={{ fontSize: '10px', marginTop: '2px' }}>More</span>
+            </button>
+
+            {/* Overflow Menu Dropdown */}
+            {showOverflowMenu && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '100%',
+                  left: '0',
+                  marginBottom: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  backdropFilter: 'blur(12px)',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15), 0 4px 6px rgba(0, 0, 0, 0.1)',
+                  padding: '8px',
+                  minWidth: '120px',
+                  zIndex: 1000
+                }}
+              >
+                <button
+                  onClick={() => {
+                    // Need to call the Canvas component's clearCanvasWithSync function
+                    // For now, we'll use the event approach similar to delete
+                    const clearEvent = new CustomEvent('clearCanvas');
+                    window.dispatchEvent(clearEvent);
+                    setShowOverflowMenu(false);
+                  }}
+                  className="transition-all duration-200"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    color: '#dc2626',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    borderRadius: '6px',
+                    textAlign: 'left',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(254, 242, 242, 0.8)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  🗑️ Clear Canvas
           </button>
+              </div>
+            )}
+          </div>
           
           <div 
             style={{

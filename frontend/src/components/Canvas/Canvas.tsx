@@ -119,6 +119,7 @@ const Canvas: React.FC<CanvasProps> = ({
     onObjectRotated,
     onTextChanged,
     onCanvasStateSync,
+    onCanvasCleared,
   } = ws;
 
   // State for tracking other users' cursors with interpolation
@@ -747,9 +748,96 @@ const Canvas: React.FC<CanvasProps> = ({
     sendObjectRotated(objectId, rotation, x, y);
   }, [updateObject, sendObjectRotated]);
 
-  // TODO: Implement these functions when adding object updates/deletions
-  // const sendObjectUpdated = useCallback((objectId: string, updates: Partial<CanvasObject>) => { ... };
-  // const sendObjectDeleted = useCallback((objectId: string) => { ... };
+  // Send object deletion message
+  const sendObjectDeleted = useCallback((objectId: string) => {
+    if (!isConnected || !roomId) {
+      console.log('🗑️ Cannot send deletion: not connected or no room', { isConnected, roomId });
+      return;
+    }
+
+    console.log(`🗑️ Sending object deletion for ${objectId}`);
+    const success = sendMessage({
+      type: 'object_deleted',
+      payload: {
+        roomId,
+        objectId
+      },
+      timestamp: Date.now()
+    });
+    console.log(`🗑️ Deletion message sent successfully: ${success}`);
+  }, [isConnected, roomId, sendMessage]);
+
+  // Handle object deletion with sync
+  const deleteObjectWithSync = useCallback((objectId: string) => {
+    console.log(`🗑️ deleteObjectWithSync called for ${objectId}`);
+    
+    // Remove from local state immediately for responsive UI
+    deleteObject(objectId);
+    
+    // Send deletion event to other users
+    sendObjectDeleted(objectId);
+  }, [deleteObject, sendObjectDeleted]);
+
+  // Send canvas clear message
+  const sendCanvasCleared = useCallback(() => {
+    if (!isConnected || !roomId) {
+      console.log('🧹 Cannot send canvas clear: not connected or no room', { isConnected, roomId });
+      return;
+    }
+
+    console.log(`🧹 Sending canvas clear for room ${roomId}`);
+    const success = sendMessage({
+      type: 'canvas_cleared',
+      payload: {
+        roomId
+      },
+      timestamp: Date.now()
+    });
+    console.log(`🧹 Canvas clear message sent successfully: ${success}`);
+  }, [isConnected, roomId, sendMessage]);
+
+  // Handle canvas clear with sync
+  const clearCanvasWithSync = useCallback(() => {
+    console.log('🧹 clearCanvasWithSync called');
+    
+    // Clear local state immediately for responsive UI
+    clearCanvas();
+    
+    // Send clear event to other users
+    sendCanvasCleared();
+  }, [clearCanvas, sendCanvasCleared]);
+
+  // Handle keyboard shortcuts and custom events
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle keyboard shortcuts if we have a selected object
+      if (!selectedObjectId) return;
+      
+      // Delete or Backspace key
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        console.log(`🗑️ Keyboard deletion triggered for object: ${selectedObjectId}`);
+        deleteObjectWithSync(selectedObjectId);
+        // Clear selection after deletion
+        selectObject(null);
+      }
+    };
+
+    const handleClearCanvas = () => {
+      console.log('🧹 Custom clearCanvas event triggered');
+      clearCanvasWithSync();
+    };
+
+    // Add event listeners
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('clearCanvas', handleClearCanvas);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('clearCanvas', handleClearCanvas);
+    };
+  }, [selectedObjectId, deleteObjectWithSync, selectObject, clearCanvasWithSync]);
 
   // Object synchronization event handlers
   useEffect(() => {
@@ -816,10 +904,17 @@ const Canvas: React.FC<CanvasProps> = ({
       updateObject(payload.objectId, payload.updates);
     });
 
+    console.log('🗑️ Setting up onObjectDeleted listener');
     const unsubscribeObjectDeleted = onObjectDeleted((payload) => {
-      // Don't delete our own objects (they're already removed from the store)
-      if (payload.userId === clientId) return;
+      console.log('🗑️ Received object deletion:', payload);
       
+      // Don't delete our own objects (they're already removed from the store)
+      if (payload.userId === clientId) {
+        console.log('🗑️ Ignoring own deletion');
+        return;
+      }
+      
+      console.log(`🗑️ Deleting object ${payload.objectId} from other user`);
       deleteObject(payload.objectId);
     });
 
@@ -991,6 +1086,20 @@ const Canvas: React.FC<CanvasProps> = ({
       });
     });
 
+    console.log('🧹 Setting up onCanvasCleared listener');
+    const unsubscribeCanvasCleared = onCanvasCleared((payload) => {
+      console.log('🧹 Received canvas clear:', payload);
+      
+      // Don't clear our own canvas (it's already cleared)
+      if (payload.userId === clientId) {
+        console.log('🧹 Ignoring own canvas clear');
+        return;
+      }
+      
+      console.log('🧹 Clearing canvas from other user');
+      clearCanvas();
+    });
+
     return () => {
       unsubscribeObjectCreated();
       unsubscribeObjectMoved();
@@ -1000,8 +1109,9 @@ const Canvas: React.FC<CanvasProps> = ({
       unsubscribeObjectRotated();
       unsubscribeTextChanged();
       unsubscribeCanvasStateSync();
+      unsubscribeCanvasCleared();
     };
-  }, [onObjectCreated, onObjectMoved, onObjectUpdated, onObjectDeleted, onObjectResized, onObjectRotated, onTextChanged, onCanvasStateSync, clientId, addObject, updateObject, deleteObject, clearCanvas, objects, interpolatingObjects, interpolatingRotations]);
+  }, [onObjectCreated, onObjectMoved, onObjectUpdated, onObjectDeleted, onObjectResized, onObjectRotated, onTextChanged, onCanvasStateSync, onCanvasCleared, clientId, addObject, updateObject, deleteObject, clearCanvas, objects, interpolatingObjects, interpolatingRotations]);
 
   // Listen for room join events and request canvas state
   useEffect(() => {

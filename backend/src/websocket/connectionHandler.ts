@@ -87,6 +87,7 @@ export class WebSocketConnectionManager {
         this.messageRouter.registerHandler('object_rotated', this.handleObjectRotated.bind(this));
         this.messageRouter.registerHandler('text_changed', this.handleTextChanged.bind(this));
         this.messageRouter.registerHandler('canvas_state_requested', this.handleCanvasStateRequested.bind(this));
+        this.messageRouter.registerHandler('canvas_cleared', this.handleCanvasCleared.bind(this));
 
         console.log(`✅ Registered handlers for: ${this.messageRouter.getRegisteredTypes().join(', ')}`);
     }
@@ -688,10 +689,12 @@ export class WebSocketConnectionManager {
     }
 
     private async handleObjectDeleted(clientId: string, message: any, _context: any): Promise<void> {
+        console.log(`🗑️ Backend received delete request from ${clientId}:`, message.payload);
         const { roomId, objectId } = message.payload || {};
         const client = this.clients.get(clientId);
 
         if (!client || !client.roomId || client.roomId !== roomId) {
+            console.log(`🗑️ Delete request rejected: client not in room ${roomId}`);
             this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
             return;
         }
@@ -710,6 +713,7 @@ export class WebSocketConnectionManager {
             return;
         }
 
+        console.log(`🗑️ Broadcasting deletion of object ${objectId} to room ${roomId}`);
         // Broadcast object deletion to all users in the room (including sender for confirmation)
         this.broadcastToRoom(roomId, {
             type: 'object_deleted',
@@ -801,6 +805,43 @@ export class WebSocketConnectionManager {
             console.error(`❌ Failed to load canvas state for room ${roomId}:`, error);
             this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to load canvas state');
         }
+    }
+
+    private async handleCanvasCleared(clientId: string, message: any, _context: any): Promise<void> {
+        console.log(`🧹 Backend received canvas clear request from ${clientId}:`, message.payload);
+        const { roomId } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            console.log(`🧹 Canvas clear request rejected: client not in room ${roomId}`);
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        try {
+            // Clear all objects from the canvas state
+            const success = canvasPersistence.clearRoom(roomId);
+            if (!success) {
+                this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to clear canvas');
+                return;
+            }
+            console.log(`🧹 Cleared canvas in room ${roomId}`);
+        } catch (error) {
+            console.error(`❌ Failed to clear canvas in room ${roomId}:`, error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to clear canvas');
+            return;
+        }
+
+        console.log(`🧹 Broadcasting canvas clear to room ${roomId}`);
+        // Broadcast canvas clear to all users in the room (including sender for confirmation)
+        this.broadcastToRoom(roomId, {
+            type: 'canvas_cleared',
+            payload: {
+                roomId,
+                userId: clientId
+            },
+            timestamp: Date.now()
+        });
     }
 
     private handleDisconnect(clientId: string, disconnectCode?: number, disconnectReason?: string): void {
