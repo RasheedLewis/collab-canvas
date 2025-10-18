@@ -4,6 +4,7 @@ export interface BaseCanvasObject {
     y: number;
     type: 'rectangle' | 'circle' | 'text';
     color: string;
+    rotation?: number; // Rotation in degrees, defaults to 0
     createdAt: number;
     updatedAt: number;
     userId?: string;

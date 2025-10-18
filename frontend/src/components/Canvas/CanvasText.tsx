@@ -14,9 +14,10 @@ interface CanvasTextProps {
     fontFamily?: string, 
     fontStyle?: string
   ) => void;
+  onDrag?: (stageX: number, stageY: number) => void;
 }
 
-const CanvasText: React.FC<CanvasTextProps> = ({ textObject, onMove, onTextChanged }) => {
+const CanvasText: React.FC<CanvasTextProps> = ({ textObject, onMove, onTextChanged, onDrag }) => {
   const { selectObject, selectedObjectId, editingTextId, setEditingTextId } = useCanvasStore();
   const textRef = useRef<Konva.Text>(null);
   
@@ -37,6 +38,21 @@ const CanvasText: React.FC<CanvasTextProps> = ({ textObject, onMove, onTextChang
   const handleDragStart = (e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true; // Prevent event from bubbling to Stage
     selectObject(textObject.id);
+  };
+
+  const handleDrag = (e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true; // Prevent event from bubbling to Stage
+    
+    // Update cursor position during drag to maintain cursor visibility for other users
+    if (onDrag) {
+      const stage = e.target.getStage();
+      if (stage) {
+        const pointer = stage.getPointerPosition();
+        if (pointer) {
+          onDrag(pointer.x, pointer.y);
+        }
+      }
+    }
   };
 
   const handleDoubleClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -181,6 +197,7 @@ const CanvasText: React.FC<CanvasTextProps> = ({ textObject, onMove, onTextChang
       text={textObject.text}
       fontSize={textObject.fontSize}
       fontFamily={textObject.fontFamily}
+      rotation={textObject.rotation || 0}
       fill={textObject.color}
       stroke={isSelected ? '#3b82f6' : 'transparent'}
       strokeWidth={isSelected ? 1 : 0}
@@ -190,6 +207,7 @@ const CanvasText: React.FC<CanvasTextProps> = ({ textObject, onMove, onTextChang
       draggable
       onDragEnd={handleDragEnd}
       onDragStart={handleDragStart}
+      onDrag={handleDrag}
       onClick={handleClick}
       onTap={handleClick}
       onDblClick={handleDoubleClick}

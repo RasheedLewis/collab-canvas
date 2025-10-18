@@ -27,6 +27,8 @@ import type {
     ObjectUpdatedCallback,
     ObjectMovedCallback,
     ObjectDeletedCallback,
+    ObjectResizedCallback,
+    ObjectRotatedCallback,
     TextChangedCallback,
     CanvasStateSyncCallback
 } from '../types/websocket';
@@ -76,6 +78,8 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
     const objectUpdatedListenersRef = useRef<Set<ObjectUpdatedCallback>>(new Set());
     const objectMovedListenersRef = useRef<Set<ObjectMovedCallback>>(new Set());
     const objectDeletedListenersRef = useRef<Set<ObjectDeletedCallback>>(new Set());
+    const objectResizedListenersRef = useRef<Set<ObjectResizedCallback>>(new Set());
+    const objectRotatedListenersRef = useRef<Set<ObjectRotatedCallback>>(new Set());
     const textChangedListenersRef = useRef<Set<TextChangedCallback>>(new Set());
     const canvasStateSyncListenersRef = useRef<Set<CanvasStateSyncCallback>>(new Set());
 
@@ -244,6 +248,17 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
 
                 case 'object_deleted': {
                     emitToListeners(objectDeletedListenersRef.current, message.payload);
+                    break;
+                }
+
+                case 'object_resized': {
+                    emitToListeners(objectResizedListenersRef.current, message.payload);
+                    break;
+                }
+
+                case 'object_rotated': {
+                    console.log('🔄 WebSocket received object_rotated message:', message.payload);
+                    emitToListeners(objectRotatedListenersRef.current, message.payload);
                     break;
                 }
 
@@ -543,6 +558,16 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         return () => objectDeletedListenersRef.current.delete(callback);
     }, []);
 
+    const onObjectResized = useCallback((callback: ObjectResizedCallback) => {
+        objectResizedListenersRef.current.add(callback);
+        return () => objectResizedListenersRef.current.delete(callback);
+    }, []);
+
+    const onObjectRotated = useCallback((callback: ObjectRotatedCallback) => {
+        objectRotatedListenersRef.current.add(callback);
+        return () => objectRotatedListenersRef.current.delete(callback);
+    }, []);
+
     const onTextChanged = useCallback((callback: TextChangedCallback) => {
         textChangedListenersRef.current.add(callback);
         return () => textChangedListenersRef.current.delete(callback);
@@ -602,6 +627,8 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         onObjectUpdated,
         onObjectMoved,
         onObjectDeleted,
+        onObjectResized,
+        onObjectRotated,
         onTextChanged,
         onCanvasStateSync,
 

@@ -91,6 +91,8 @@ export const SUPPORTED_MESSAGE_TYPES = [
     'object_updated',
     'object_moved',
     'object_deleted',
+    'object_resized',
+    'object_rotated',
     'text_changed',
     'canvas_state_requested',
     'canvas_state_sync'
@@ -209,6 +211,33 @@ export const ClientMessageSchemas = {
         payload: z.object({
             roomId: z.string(),
             objectId: z.string().min(1, 'Object ID is required'),
+        }),
+    }),
+
+    object_resized: BaseMessageSchema.extend({
+        type: z.literal('object_resized'),
+        payload: z.object({
+            roomId: z.string(),
+            objectId: z.string().min(1, 'Object ID is required'),
+            updates: z.object({
+                x: z.number().optional(),
+                y: z.number().optional(),
+                width: z.number().positive().optional(),
+                height: z.number().positive().optional(),
+                radius: z.number().positive().optional(),
+                fontSize: z.number().positive().optional(),
+            }),
+        }),
+    }),
+
+    object_rotated: BaseMessageSchema.extend({
+        type: z.literal('object_rotated'),
+        payload: z.object({
+            roomId: z.string(),
+            objectId: z.string().min(1, 'Object ID is required'),
+            rotation: z.number(), // Rotation in degrees
+            x: z.number(), // Updated x position after rotation
+            y: z.number(), // Updated y position after rotation
         }),
     }),
 
@@ -403,6 +432,35 @@ export const ServerMessageSchemas = {
             roomId: z.string(),
             objectId: z.string(),
             userId: z.string(), // User who deleted the object
+        }),
+    }),
+
+    object_resized: BaseMessageSchema.extend({
+        type: z.literal('object_resized'),
+        payload: z.object({
+            roomId: z.string(),
+            objectId: z.string(),
+            updates: z.object({
+                x: z.number().optional(),
+                y: z.number().optional(),
+                width: z.number().positive().optional(),
+                height: z.number().positive().optional(),
+                radius: z.number().positive().optional(),
+                fontSize: z.number().positive().optional(),
+            }),
+            userId: z.string(), // User who resized the object
+        }),
+    }),
+
+    object_rotated: BaseMessageSchema.extend({
+        type: z.literal('object_rotated'),
+        payload: z.object({
+            roomId: z.string(),
+            objectId: z.string(),
+            rotation: z.number(), // Rotation in degrees
+            x: z.number(), // Updated x position after rotation
+            y: z.number(), // Updated y position after rotation
+            userId: z.string(), // User who rotated the object
         }),
     }),
 

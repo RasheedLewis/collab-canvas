@@ -15,6 +15,7 @@ interface BaseCanvasObject {
     y: number;
     type: 'rectangle' | 'circle' | 'text';
     color: string;
+    rotation?: number;
     createdAt: number;
     updatedAt: number;
     userId?: string;

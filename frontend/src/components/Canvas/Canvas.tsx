@@ -7,6 +7,7 @@ import CanvasCircle from './CanvasCircle';
 import CanvasText from './CanvasText';
 import ActiveUsers from './ActiveUsers';
 import SettingsButton from './SettingsButton';
+import ResizeTransformer from './ResizeTransformer';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { useAuthUser, useAuthUserProfile } from '../../store/authStore';
@@ -17,6 +18,39 @@ import type {
   CursorUpdatePayload, 
   CursorLeftPayload
 } from '../../types/websocket';
+
+// Interface for object interpolation state
+interface ObjectInterpolation {
+  // Current interpolated position (for smooth rendering)
+  x: number;
+  y: number;
+  // Target position (from network updates)
+  targetX: number;
+  targetY: number;
+  // Previous position (for velocity calculation)
+  prevX: number;
+  prevY: number;
+  // Interpolation tracking
+  startTime: number;
+  duration: number;
+  objectId: string;
+  userId: string; // User who moved the object
+}
+
+// Interface for rotation interpolation state
+interface RotationInterpolation {
+  // Current interpolated rotation (for smooth rendering)
+  rotation: number;
+  // Target rotation (from network updates)
+  targetRotation: number;
+  // Previous rotation (for velocity calculation)
+  prevRotation: number;
+  // Interpolation tracking
+  startTime: number;
+  duration: number;
+  objectId: string;
+  userId: string; // User who rotated the object
+}
 
 interface CanvasProps {
   width?: number;
@@ -50,6 +84,7 @@ const Canvas: React.FC<CanvasProps> = ({
     createCircle, 
     createText, 
     selectObject,
+    selectedObjectId,
     addObject,
     updateObject,
     deleteObject,
@@ -80,6 +115,8 @@ const Canvas: React.FC<CanvasProps> = ({
     onObjectUpdated,
     onObjectMoved,
     onObjectDeleted,
+    onObjectResized,
+    onObjectRotated,
     onTextChanged,
     onCanvasStateSync,
   } = ws;
@@ -112,22 +149,10 @@ const Canvas: React.FC<CanvasProps> = ({
   }>>(new Map());
 
   // State for tracking interpolating object movements
-  const [interpolatingObjects, setInterpolatingObjects] = useState<Map<string, {
-    // Current interpolated position (for smooth rendering)
-    x: number;
-    y: number;
-    // Target position (from network updates)
-    targetX: number;
-    targetY: number;
-    // Previous position (for velocity calculation)
-    prevX: number;
-    prevY: number;
-    // Interpolation tracking
-    startTime: number;
-    duration: number;
-    objectId: string;
-    userId: string; // User who moved the object
-  }>>(new Map());
+  const [interpolatingObjects, setInterpolatingObjects] = useState<Map<string, ObjectInterpolation>>(new Map());
+
+  // State for tracking interpolating object rotations
+  const [interpolatingRotations, setInterpolatingRotations] = useState<Map<string, RotationInterpolation>>(new Map());
 
   // Cursor throttling state
   const lastCursorUpdateRef = useRef<number>(0);
@@ -212,12 +237,32 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Helper function to get interpolated position for an object
   const getObjectRenderPosition = useCallback((objectId: string, defaultX: number, defaultY: number) => {
+    // Don't use interpolated position for the currently selected object to avoid conflicts with transformer
+    if (selectedObjectId === objectId) {
+      return { x: defaultX, y: defaultY };
+    }
+    
     const interpolation = interpolatingObjects.get(objectId);
     if (interpolation) {
       return { x: interpolation.x, y: interpolation.y };
     }
     return { x: defaultX, y: defaultY };
-  }, [interpolatingObjects]);
+  }, [interpolatingObjects, selectedObjectId]);
+
+  // Helper function to get interpolated rotation for an object
+  const getObjectRenderRotation = useCallback((objectId: string, defaultRotation: number) => {
+    // Don't use interpolated rotation for the currently selected object to avoid conflicts with transformer
+    if (selectedObjectId === objectId) {
+      return defaultRotation;
+    }
+    
+    const interpolation = interpolatingRotations.get(objectId);
+    if (interpolation) {
+      return interpolation.rotation;
+    }
+    return defaultRotation;
+  }, [interpolatingRotations, selectedObjectId]);
+
 
   // Animation loop for smooth cursor and object interpolation
   const animateInterpolations = useCallback(() => {
@@ -304,15 +349,61 @@ const Canvas: React.FC<CanvasProps> = ({
       return needsObjectUpdate ? updated : prev;
     });
 
-    // Continue animation if any cursors or objects are still moving
-    if (otherCursors.size > 0 || interpolatingObjects.size > 0) {
+    // Animate rotations
+    setInterpolatingRotations(prev => {
+      const updated = new Map(prev);
+      const toRemove = new Set<string>();
+      
+      for (const [objectId, interpolation] of updated.entries()) {
+        const timePassed = now - interpolation.startTime;
+        const progress = Math.min(timePassed / interpolation.duration, 1);
+        
+        if (progress < 1) {
+          // Apply easing for smooth rotation
+          const easedProgress = easeOutQuad(progress);
+          
+          // Handle rotation interpolation with proper angle wrapping
+          const angleDiff = interpolation.targetRotation - interpolation.prevRotation;
+          let shortestAngleDiff = ((angleDiff % 360) + 540) % 360 - 180; // Shortest path between angles
+          
+          const newRotation = interpolation.prevRotation + (shortestAngleDiff * easedProgress);
+          
+          if (Math.abs(newRotation - interpolation.rotation) > 0.1) {
+            interpolation.rotation = newRotation;
+            needsObjectUpdate = true;
+          }
+        } else {
+          // Snap to final rotation and update the actual object
+          interpolation.rotation = interpolation.targetRotation;
+          
+          // Update the actual object in the store
+          updateObject(objectId, { rotation: interpolation.targetRotation });
+          
+          // Mark for removal from interpolation
+          toRemove.add(objectId);
+          needsObjectUpdate = true;
+        }
+      }
+      
+      // Remove completed interpolations
+      if (toRemove.size > 0) {
+        for (const objectId of toRemove) {
+          updated.delete(objectId);
+        }
+      }
+      
+      return needsObjectUpdate ? updated : prev;
+    });
+
+    // Continue animation if any cursors, objects, or rotations are still moving
+    if (otherCursors.size > 0 || interpolatingObjects.size > 0 || interpolatingRotations.size > 0) {
       animationFrameRef.current = requestAnimationFrame(animateInterpolations);
     }
-  }, [otherCursors.size, interpolatingObjects.size, updateObject]);
+  }, [otherCursors.size, interpolatingObjects.size, interpolatingRotations.size, updateObject]);
 
-  // Start animation loop when cursors or objects are present
+  // Start animation loop when cursors, objects, or rotations are present
   useEffect(() => {
-    if ((otherCursors.size > 0 || interpolatingObjects.size > 0) && !animationFrameRef.current) {
+    if ((otherCursors.size > 0 || interpolatingObjects.size > 0 || interpolatingRotations.size > 0) && !animationFrameRef.current) {
       animationFrameRef.current = requestAnimationFrame(animateInterpolations);
     }
     
@@ -322,7 +413,7 @@ const Canvas: React.FC<CanvasProps> = ({
         animationFrameRef.current = null;
       }
     };
-  }, [otherCursors.size, interpolatingObjects.size, animateInterpolations]);
+  }, [otherCursors.size, interpolatingObjects.size, interpolatingRotations.size, animateInterpolations]);
 
   // Handle window resize
   useEffect(() => {
@@ -378,6 +469,7 @@ const Canvas: React.FC<CanvasProps> = ({
       }
     }
   }, [isConnected, roomId, sendMessage, tool]);
+
 
   // WebSocket event listeners for cursor synchronization
   useEffect(() => {
@@ -597,12 +689,72 @@ const Canvas: React.FC<CanvasProps> = ({
     });
   }, [isConnected, roomId, sendMessage]);
 
+  // Send object resize message
+  const sendObjectResized = useCallback((objectId: string, updates: Partial<CanvasObject>) => {
+    if (!isConnected || !roomId) return;
+
+    console.log(`📐 Sending object resize for ${objectId}:`, updates);
+    sendMessage({
+      type: 'object_resized',
+      payload: {
+        roomId,
+        objectId,
+        updates
+      },
+      timestamp: Date.now()
+    });
+  }, [isConnected, roomId, sendMessage]);
+
+  // Handle object resize with sync
+  const resizeObjectWithSync = useCallback((objectId: string, updates: Partial<CanvasObject>) => {
+    // Update local state immediately for responsive UI
+    updateObject(objectId, updates);
+    
+    // Send resize event to other users
+    sendObjectResized(objectId, updates);
+  }, [updateObject, sendObjectResized]);
+
+  // Send object rotation message
+  const sendObjectRotated = useCallback((objectId: string, rotation: number, x: number, y: number) => {
+    if (!isConnected || !roomId) {
+      console.log('🔄 Cannot send rotation: not connected or no room', { isConnected, roomId });
+      return;
+    }
+
+    console.log(`🔄 Sending object rotation for ${objectId}: ${rotation}° at (${x}, ${y})`);
+    const success = sendMessage({
+      type: 'object_rotated',
+      payload: {
+        roomId,
+        objectId,
+        rotation,
+        x,
+        y
+      },
+      timestamp: Date.now()
+    });
+    console.log(`🔄 Rotation message sent successfully: ${success}`);
+  }, [isConnected, roomId, sendMessage]);
+
+  // Handle object rotation with sync
+  const rotateObjectWithSync = useCallback((objectId: string, rotation: number, x: number, y: number) => {
+    console.log(`🔄 rotateObjectWithSync called for ${objectId}: ${rotation}° at (${x}, ${y})`);
+    
+    // Update local state immediately for responsive UI (both rotation and position)
+    updateObject(objectId, { rotation, x, y });
+    
+    // Send rotation event to other users (including position)
+    sendObjectRotated(objectId, rotation, x, y);
+  }, [updateObject, sendObjectRotated]);
+
   // TODO: Implement these functions when adding object updates/deletions
   // const sendObjectUpdated = useCallback((objectId: string, updates: Partial<CanvasObject>) => { ... };
   // const sendObjectDeleted = useCallback((objectId: string) => { ... };
 
   // Object synchronization event handlers
   useEffect(() => {
+    console.log('🔄 Setting up object synchronization event handlers, including rotation');
+    
     const unsubscribeObjectCreated = onObjectCreated((payload) => {
       // Don't add our own objects (they're already in the store)
       if (payload.userId === clientId) return;
@@ -619,7 +771,7 @@ const Canvas: React.FC<CanvasProps> = ({
       
       if (!currentObject) {
         // Object not found, just update directly
-        updateObject(payload.objectId, { x: payload.x, y: payload.y });
+      updateObject(payload.objectId, { x: payload.x, y: payload.y });
         return;
       }
 
@@ -671,6 +823,150 @@ const Canvas: React.FC<CanvasProps> = ({
       deleteObject(payload.objectId);
     });
 
+    const unsubscribeObjectResized = onObjectResized((payload) => {
+      // Don't update our own resize changes (they're already in the store)
+      if (payload.userId === clientId) return;
+      
+      const now = Date.now();
+      const currentObject = objects.find(obj => obj.id === payload.objectId);
+      
+      if (!currentObject) {
+        // Object not found, just update directly
+        updateObject(payload.objectId, payload.updates);
+        return;
+      }
+
+      // Check if this object is already interpolating
+      const existingInterpolation = interpolatingObjects.get(payload.objectId);
+      
+      // Calculate distance to determine if we need position-based animation
+      let distance = 0;
+      if (payload.updates.x !== undefined && payload.updates.y !== undefined) {
+        const fromX = existingInterpolation ? existingInterpolation.x : currentObject.x;
+        const fromY = existingInterpolation ? existingInterpolation.y : currentObject.y;
+        distance = Math.sqrt(
+          Math.pow(payload.updates.x - fromX, 2) + 
+          Math.pow(payload.updates.y - fromY, 2)
+        );
+      }
+      
+      // For resize operations, use shorter duration since they're usually smaller changes
+      const duration = distance > 0 ? Math.max(100, Math.min(300, distance * 2)) : 150;
+
+      // Set up interpolation for position changes if present
+      if (payload.updates.x !== undefined && payload.updates.y !== undefined) {
+        const fromX = existingInterpolation ? existingInterpolation.x : currentObject.x;
+        const fromY = existingInterpolation ? existingInterpolation.y : currentObject.y;
+        
+        setInterpolatingObjects(prev => {
+          const updated = new Map(prev);
+          updated.set(payload.objectId, {
+            x: fromX,
+            y: fromY,
+            prevX: fromX,
+            prevY: fromY,
+            targetX: payload.updates.x!,
+            targetY: payload.updates.y!,
+            startTime: now,
+            duration,
+            objectId: payload.objectId,
+            userId: payload.userId
+          });
+          return updated;
+        });
+      }
+      
+      // Update size properties immediately (no interpolation needed for size changes)
+      const sizeUpdates: any = {};
+      if (payload.updates.width !== undefined) sizeUpdates.width = payload.updates.width;
+      if (payload.updates.height !== undefined) sizeUpdates.height = payload.updates.height;
+      if (payload.updates.radius !== undefined) sizeUpdates.radius = payload.updates.radius;
+      if (payload.updates.fontSize !== undefined) sizeUpdates.fontSize = payload.updates.fontSize;
+      
+      if (Object.keys(sizeUpdates).length > 0) {
+        updateObject(payload.objectId, sizeUpdates);
+      }
+    });
+
+    console.log('🔄 Setting up onObjectRotated listener');
+    const unsubscribeObjectRotated = onObjectRotated((payload) => {
+      console.log('🔄 Received object rotation:', payload);
+      
+      // Don't update our own rotation changes (they're already in the store)
+      if (payload.userId === clientId) {
+        console.log('🔄 Ignoring own rotation change');
+        return;
+      }
+      
+      const now = Date.now();
+      const currentObject = objects.find(obj => obj.id === payload.objectId);
+      
+      if (!currentObject) {
+        // Object not found, just update directly with all properties
+        console.log('🔄 Object not found, updating directly:', payload.objectId);
+        updateObject(payload.objectId, { 
+          rotation: payload.rotation, 
+          x: payload.x, 
+          y: payload.y 
+        });
+        return;
+      }
+
+      const currentRotation = currentObject.rotation || 0;
+      console.log(`🔄 Current rotation: ${currentRotation}°, Target: ${payload.rotation}° at (${payload.x}, ${payload.y})`);
+      
+      // Calculate angle difference and duration for smooth rotation
+      const angleDiff = Math.abs(payload.rotation - currentRotation);
+      const duration = Math.max(200, Math.min(500, angleDiff * 2)); // Duration based on angle difference
+
+      console.log(`🔄 Setting up rotation interpolation: ${currentRotation}° → ${payload.rotation}° over ${duration}ms`);
+
+      // Set up rotation interpolation
+      setInterpolatingRotations(prev => {
+        const updated = new Map(prev);
+        updated.set(payload.objectId, {
+          rotation: currentRotation, // Current rotation
+          prevRotation: currentRotation, // Previous rotation
+          targetRotation: payload.rotation, // New target rotation
+          startTime: now,
+          duration,
+          objectId: payload.objectId,
+          userId: payload.userId
+        });
+        return updated;
+      });
+      
+      // Also set up position interpolation since rotation affects position
+      const distance = Math.sqrt(
+        Math.pow(payload.x - currentObject.x, 2) + 
+        Math.pow(payload.y - currentObject.y, 2)
+      );
+      
+      if (distance > 1) { // Only interpolate if there's significant position change
+        const positionDuration = Math.max(100, Math.min(300, distance * 2));
+        
+        setInterpolatingObjects(prev => {
+          const updated = new Map(prev);
+          updated.set(payload.objectId, {
+            x: currentObject.x,
+            y: currentObject.y,
+            prevX: currentObject.x,
+            prevY: currentObject.y,
+            targetX: payload.x,
+            targetY: payload.y,
+            startTime: now,
+            duration: positionDuration,
+            objectId: payload.objectId,
+            userId: payload.userId
+          });
+          return updated;
+        });
+      } else {
+        // If position change is small, update immediately
+        updateObject(payload.objectId, { x: payload.x, y: payload.y });
+      }
+    });
+
     const unsubscribeTextChanged = onTextChanged((payload) => {
       // Don't update our own text changes (they're already in the store)
       if (payload.userId === clientId) return;
@@ -700,10 +996,12 @@ const Canvas: React.FC<CanvasProps> = ({
       unsubscribeObjectMoved();
       unsubscribeObjectUpdated();  
       unsubscribeObjectDeleted();
+      unsubscribeObjectResized();
+      unsubscribeObjectRotated();
       unsubscribeTextChanged();
       unsubscribeCanvasStateSync();
     };
-  }, [onObjectCreated, onObjectMoved, onObjectUpdated, onObjectDeleted, onTextChanged, onCanvasStateSync, clientId, addObject, updateObject, deleteObject, clearCanvas]);
+  }, [onObjectCreated, onObjectMoved, onObjectUpdated, onObjectDeleted, onObjectResized, onObjectRotated, onTextChanged, onCanvasStateSync, clientId, addObject, updateObject, deleteObject, clearCanvas, objects, interpolatingObjects, interpolatingRotations]);
 
   // Listen for room join events and request canvas state
   useEffect(() => {
@@ -843,6 +1141,15 @@ const Canvas: React.FC<CanvasProps> = ({
       y: (screenY - stagePos.y) / stageScale,
     };
   }, [stagePos.x, stagePos.y, stageScale]);
+
+  // Helper function to update cursor position during drag operations
+  const updateCursorDuringDrag = useCallback((stageX: number, stageY: number) => {
+    const canvasCoords = getCanvasCoordinates(stageX, stageY);
+    throttledCursorUpdate(canvasCoords.x, canvasCoords.y);
+  }, [throttledCursorUpdate, getCanvasCoordinates]);
+
+  // Get the currently selected object
+  const selectedObject = selectedObjectId ? objects.find(obj => obj.id === selectedObjectId) || null : null;
 
   // Handle mouse down - start shape creation
   const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -1038,14 +1345,16 @@ const Canvas: React.FC<CanvasProps> = ({
           
           {/* Render canvas objects */}
           {objects.map((obj) => {
-            // Get interpolated position for smooth movement
+            // Get interpolated position and rotation for smooth movement
             const renderPos = getObjectRenderPosition(obj.id, obj.x, obj.y);
+            const renderRotation = getObjectRenderRotation(obj.id, obj.rotation || 0);
             
             if (obj.type === 'rectangle') {
               const rectangleWithInterpolation = {
                 ...obj,
                 x: renderPos.x,
-                y: renderPos.y
+                y: renderPos.y,
+                rotation: renderRotation
               } as RectangleObject;
               
               return (
@@ -1053,13 +1362,15 @@ const Canvas: React.FC<CanvasProps> = ({
                   key={obj.id} 
                   rectangle={rectangleWithInterpolation}
                   onMove={moveObjectWithSync}
+                  onDrag={updateCursorDuringDrag}
                 />
               );
             } else if (obj.type === 'circle') {
               const circleWithInterpolation = {
                 ...obj,
                 x: renderPos.x,
-                y: renderPos.y
+                y: renderPos.y,
+                rotation: renderRotation
               } as CircleObject;
               
               return (
@@ -1067,13 +1378,15 @@ const Canvas: React.FC<CanvasProps> = ({
                   key={obj.id} 
                   circle={circleWithInterpolation}
                   onMove={moveObjectWithSync}
+                  onDrag={updateCursorDuringDrag}
                 />
               );
             } else if (obj.type === 'text') {
               const textWithInterpolation = {
                 ...obj,
                 x: renderPos.x,
-                y: renderPos.y
+                y: renderPos.y,
+                rotation: renderRotation
               } as TextObject;
               
               return (
@@ -1082,11 +1395,20 @@ const Canvas: React.FC<CanvasProps> = ({
                   textObject={textWithInterpolation}
                   onMove={moveObjectWithSync}
                   onTextChanged={changeTextWithSync}
+                  onDrag={updateCursorDuringDrag}
                 />
               );
             }
             return null;
           })}
+
+          {/* Resize transformer for selected objects */}
+          <ResizeTransformer 
+            selectedObject={selectedObject}
+            stageRef={stageRef}
+            onResize={resizeObjectWithSync}
+            onRotate={rotateObjectWithSync}
+          />
           
           {/* Preview shape while creating */}
           {previewShape && (

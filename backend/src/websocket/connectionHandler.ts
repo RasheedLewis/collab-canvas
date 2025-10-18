@@ -83,6 +83,8 @@ export class WebSocketConnectionManager {
         this.messageRouter.registerHandler('object_updated', this.handleObjectUpdated.bind(this));
         this.messageRouter.registerHandler('object_moved', this.handleObjectMoved.bind(this));
         this.messageRouter.registerHandler('object_deleted', this.handleObjectDeleted.bind(this));
+        this.messageRouter.registerHandler('object_resized', this.handleObjectResized.bind(this));
+        this.messageRouter.registerHandler('object_rotated', this.handleObjectRotated.bind(this));
         this.messageRouter.registerHandler('text_changed', this.handleTextChanged.bind(this));
         this.messageRouter.registerHandler('canvas_state_requested', this.handleCanvasStateRequested.bind(this));
 
@@ -592,6 +594,91 @@ export class WebSocketConnectionManager {
             payload: {
                 roomId,
                 objectId,
+                x,
+                y,
+                userId: clientId
+            },
+            timestamp: Date.now()
+        });
+    }
+
+    private async handleObjectResized(clientId: string, message: any, _context: any): Promise<void> {
+        const { roomId, objectId, updates } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        // Add timestamp to updates
+        const updatesWithTimestamp = {
+            ...updates,
+            updatedAt: Date.now()
+        };
+
+        try {
+            // Persist the object resize update
+            const success = await canvasPersistence.updateObject(roomId, objectId, updatesWithTimestamp);
+            if (!success) {
+                this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, `Object ${objectId} not found`);
+                return;
+            }
+            console.log(`📐 Resized object ${objectId} in room ${roomId}:`, updates);
+        } catch (error) {
+            console.error(`❌ Failed to resize object ${objectId}:`, error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to resize object');
+            return;
+        }
+
+        // Broadcast object resize to all users in the room (including sender)
+        this.broadcastToRoom(roomId, {
+            type: 'object_resized',
+            payload: {
+                roomId,
+                objectId,
+                updates,
+                userId: clientId
+            },
+            timestamp: Date.now()
+        });
+    }
+
+    private async handleObjectRotated(clientId: string, message: any, _context: any): Promise<void> {
+        const { roomId, objectId, rotation, x, y } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        try {
+            // Persist the object rotation and position update
+            const success = await canvasPersistence.updateObject(roomId, objectId, {
+                rotation,
+                x,
+                y,
+                updatedAt: Date.now()
+            });
+            if (!success) {
+                this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, `Object ${objectId} not found`);
+                return;
+            }
+            console.log(`🔄 Rotated object ${objectId} to ${rotation}° at (${x}, ${y}) in room ${roomId}`);
+        } catch (error) {
+            console.error(`❌ Failed to rotate object ${objectId}:`, error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to rotate object');
+            return;
+        }
+
+        // Broadcast object rotation to all users in the room (including sender)
+        this.broadcastToRoom(roomId, {
+            type: 'object_rotated',
+            payload: {
+                roomId,
+                objectId,
+                rotation,
                 x,
                 y,
                 userId: clientId

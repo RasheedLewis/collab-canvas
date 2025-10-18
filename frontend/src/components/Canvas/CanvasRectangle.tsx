@@ -7,9 +7,10 @@ import { useCanvasStore } from '../../store/canvasStore';
 interface CanvasRectangleProps {
   rectangle: RectangleObject;
   onMove: (objectId: string, x: number, y: number) => void;
+  onDrag?: (stageX: number, stageY: number) => void;
 }
 
-const CanvasRectangle: React.FC<CanvasRectangleProps> = ({ rectangle, onMove }) => {
+const CanvasRectangle: React.FC<CanvasRectangleProps> = ({ rectangle, onMove, onDrag }) => {
   const { selectObject, selectedObjectId } = useCanvasStore();
   
   const isSelected = selectedObjectId === rectangle.id;
@@ -30,6 +31,21 @@ const CanvasRectangle: React.FC<CanvasRectangleProps> = ({ rectangle, onMove }) 
     selectObject(rectangle.id);
   };
 
+  const handleDrag = (e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true; // Prevent event from bubbling to Stage
+    
+    // Update cursor position during drag to maintain cursor visibility for other users
+    if (onDrag) {
+      const stage = e.target.getStage();
+      if (stage) {
+        const pointer = stage.getPointerPosition();
+        if (pointer) {
+          onDrag(pointer.x, pointer.y);
+        }
+      }
+    }
+  };
+
   return (
     <Rect
       id={rectangle.id}
@@ -37,6 +53,7 @@ const CanvasRectangle: React.FC<CanvasRectangleProps> = ({ rectangle, onMove }) 
       y={rectangle.y}
       width={rectangle.width}
       height={rectangle.height}
+      rotation={rectangle.rotation || 0}
       fill={rectangle.color}
       stroke={isSelected ? '#3b82f6' : 'transparent'}
       strokeWidth={isSelected ? 2 : 0}
@@ -47,6 +64,7 @@ const CanvasRectangle: React.FC<CanvasRectangleProps> = ({ rectangle, onMove }) 
       draggable
       onDragEnd={handleDragEnd}
       onDragStart={handleDragStart}
+      onDrag={handleDrag}
       onClick={handleClick}
       onTap={handleClick}
       // Visual feedback

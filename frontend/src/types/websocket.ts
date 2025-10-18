@@ -349,6 +349,35 @@ export interface TextChangedMessage extends WebSocketMessage {
     };
 }
 
+export interface ObjectResizedMessage extends WebSocketMessage {
+    type: 'object_resized';
+    payload: {
+        roomId: string;
+        objectId: string;
+        updates: {
+            x?: number;
+            y?: number;
+            width?: number;
+            height?: number;
+            radius?: number;
+            fontSize?: number;
+        };
+        userId: string;
+    };
+}
+
+export interface ObjectRotatedMessage extends WebSocketMessage {
+    type: 'object_rotated';
+    payload: {
+        roomId: string;
+        objectId: string;
+        rotation: number; // Rotation in degrees
+        x: number; // Updated x position after rotation
+        y: number; // Updated y position after rotation
+        userId: string;
+    };
+}
+
 export interface CanvasStateSyncMessage extends WebSocketMessage {
     type: 'canvas_state_sync';
     payload: {
@@ -388,6 +417,8 @@ export type ObjectSyncMessage =
     | ObjectUpdatedMessage
     | ObjectMovedMessage
     | ObjectDeletedMessage
+    | ObjectResizedMessage
+    | ObjectRotatedMessage
     | TextChangedMessage
     | CanvasStateSyncMessage
     | CanvasStateRequestedMessage;
@@ -398,6 +429,8 @@ export type ObjectUpdatedCallback = (payload: ObjectUpdatedMessage['payload']) =
 export type ObjectMovedCallback = (payload: ObjectMovedMessage['payload']) => void;
 export type ObjectDeletedCallback = (payload: ObjectDeletedMessage['payload']) => void;
 export type TextChangedCallback = (payload: TextChangedMessage['payload']) => void;
+export type ObjectResizedCallback = (payload: ObjectResizedMessage['payload']) => void;
+export type ObjectRotatedCallback = (payload: ObjectRotatedMessage['payload']) => void;
 export type CanvasStateSyncCallback = (payload: CanvasStateSyncMessage['payload']) => void;
 export type ConnectionStateCallback = (state: WebSocketConnectionState) => void;
 export type UserJoinedCallback = (payload: UserJoinedPayload) => void;
@@ -407,3 +440,40 @@ export type ErrorCallback = (payload: ErrorPayload) => void;
 export type CursorMovedCallback = (payload: CursorMovedPayload) => void;
 export type CursorUpdateCallback = (payload: CursorUpdatePayload) => void;
 export type CursorLeftCallback = (payload: CursorLeftPayload) => void;
+
+// WebSocket Hook Return Interface
+export interface WebSocketHookReturn {
+    // Connection state
+    isConnected: boolean;
+    connectionState: WebSocketConnectionState;
+    clientId: string | null;
+    roomId: string | null;
+
+    // Connection methods  
+    connect: () => void;
+    disconnect: () => void;
+    sendMessage: (message: WebSocketMessage) => boolean;
+    joinRoom: (roomId: string, userInfo?: WebSocketUser) => void;
+
+    // Event listener methods
+    onMessage: (callback: MessageCallback) => () => void;
+    onConnectionChange: (callback: ConnectionStateCallback) => () => void;
+    onUserJoined: (callback: UserJoinedCallback) => () => void;
+    onUserLeft: (callback: UserLeftCallback) => () => void;
+    onError: (callback: ErrorCallback) => () => void;
+
+    // Cursor event methods
+    onCursorMoved: (callback: CursorMovedCallback) => () => void;
+    onCursorUpdate: (callback: CursorUpdateCallback) => () => void;
+    onCursorLeft: (callback: CursorLeftCallback) => () => void;
+
+    // Object synchronization event methods
+    onObjectCreated: (callback: ObjectCreatedCallback) => () => void;
+    onObjectUpdated: (callback: ObjectUpdatedCallback) => () => void;
+    onObjectMoved: (callback: ObjectMovedCallback) => () => void;
+    onObjectDeleted: (callback: ObjectDeletedCallback) => () => void;
+    onObjectResized: (callback: ObjectResizedCallback) => () => void;
+    onObjectRotated: (callback: ObjectRotatedCallback) => () => void;
+    onTextChanged: (callback: TextChangedCallback) => () => void;
+    onCanvasStateSync: (callback: CanvasStateSyncCallback) => () => void;
+}
