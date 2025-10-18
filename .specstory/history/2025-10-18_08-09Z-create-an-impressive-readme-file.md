@@ -552,3 +552,334 @@ The file has been created without any linting issues and is ready to use! 🚀
 
 ---
 
+_**User (2025-10-17 16:02Z)**_
+
+Some corrections:
+
+The frontend is deployed on Netlify and the backend is deployed on Railway.
+
+Accessing the demo gif link throws this error: Cannot proxy the given URL
+
+The sole engineer is Rasheed Lewis, twitter handle is RasheedLLewis, and email is me@rasheedlewis.com
+
+---
+
+_**Assistant (claude-4-sonnet-thinking)**_
+
+<think><details><summary>Thought Process</summary>The user wants me to make some corrections to the README file:
+
+1. Frontend is deployed on Netlify (not Vercel), backend on Railway
+2. The demo gif link is broken and needs to be removed or fixed
+3. Update the contact information to reflect that Rasheed Lewis is the sole engineer, with his Twitter handle @RasheedLLewis and email me@rasheedlewis.com
+
+I need to update the README file with these corrections.</details></think>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: README.md</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 1
+
+```diff
+@@ -9,5 +9,6 @@
+  [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+  [![Firebase](https://img.shields.io/badge/Firebase-Latest-FFCA28?style=flat-square&logo=firebase)](https://firebase.google.com/)
+- [![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-000000?style=flat-square&logo=vercel)](https://vercel.com/)
++ [![Netlify](https://img.shields.io/badge/Frontend-Netlify-00C7B7?style=flat-square&logo=netlify)](https://netlify.com/)
++ [![Railway](https://img.shields.io/badge/Backend-Railway-0B0D0E?style=flat-square&logo=railway)](https://railway.app/)
+  
+  ---
+```
+
+</details>
+
+---
+
+<think><details><summary>Thought Process</summary>Now I need to remove or fix the broken demo gif link. Let me find it in the file and remove it since it's throwing an error.</details></think>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: README.md</summary>
+
+**Chunk 1**
+Lines added: undefined, lines removed: 2
+
+```diff
+@@ -60,6 +60,4 @@
+  
+  **Try it now:** [co-canvas.netlify.app](https://co-canvas.netlify.app/)
+- 
+- ![Demo GIF](https://via.placeholder.com/800x400/4285f4/ffffff?text=CollabCanvas+Demo)
+  
+  *Experience real-time collaboration by opening the demo in multiple browser windows!*
+```
+
+</details>
+
+---
+
+<think><details><summary>Thought Process</summary>Now I need to update the deployment section to reflect Netlify for frontend and Railway for backend.</details></think>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: README.md</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 2
+
+```diff
+@@ -114,6 +114,6 @@
+  
+  **Deployment & Infrastructure:**
+- - **Vercel** for frontend hosting with global CDN
+- - **Railway/Render** for backend deployment
++ - **Netlify** for frontend hosting with global CDN
++ - **Railway** for backend deployment
+  - **Automated CI/CD** with GitHub Actions
+  
+```
+
+</details>
+
+---
+
+<think><details><summary>Thought Process</summary>Now I need to update the deployment instructions to use Netlify instead of Vercel.</details></think>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: README.md</summary>
+
+**Chunk 1**
+Lines added: 4, lines removed: 4
+
+```diff
+@@ -271,14 +271,14 @@
+  ### Production Deployment
+  
+- **Frontend (Vercel):**
++ **Frontend (Netlify):**
+  ```bash
+  npm run build
+- vercel deploy --prod
++ netlify deploy --prod --dir=dist
+  ```
+  
+- **Backend (Railway/Render):**
++ **Backend (Railway):**
+  ```bash
+  npm run build
+- # Deploy using platform-specific commands
++ # Deploy using Railway CLI or GitHub integration
+  ```
+  
+```
+
+</details>
+
+---
+
+<think><details><summary>Thought Process</summary>Now I need to update the acknowledgments section to mention Netlify instead of Vercel.</details></think>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: README.md</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 1
+
+```diff
+@@ -354,5 +354,6 @@
+  - **Konva.js** for powerful 2D canvas rendering
+  - **Firebase** for reliable real-time infrastructure  
+- - **Vercel** for seamless deployment and hosting
++ - **Netlify** for seamless frontend deployment and hosting
++ - **Railway** for reliable backend hosting
+  - **The React community** for amazing tools and libraries
+  
+```
+
+</details>
+
+---
+
+<think><details><summary>Thought Process</summary>Finally, I need to update the footer section to reflect that Rasheed Lewis is the sole engineer and update the contact information with his Twitter handle and email.</details></think>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: README.md</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 2
+
+```diff
+@@ -362,7 +362,7 @@
+  <div align="center">
+  
+- **Built with ❤️ by the CollabCanvas team**
++ **Built with ❤️ by Rasheed Lewis**
+  
+- [🌐 Live Demo](https://co-canvas.netlify.app/) • [📧 Contact](mailto:hello@collabcanvas.com) • [🐦 Twitter](https://twitter.com/collabcanvas)
++ [🌐 Live Demo](https://co-canvas.netlify.app/) • [📧 Contact](mailto:me@rasheedlewis.com) • [🐦 Twitter](https://twitter.com/RasheedLLewis)
+  
+  ⭐ **Star us on GitHub** if you find CollabCanvas useful!
+```
+
+</details>
+
+---
+
+<think><details><summary>Thought Process</summary>Now let me check for any linting errors after all these changes.</details></think>
+
+---
+
+Tool use: **read_lints**
+
+<details>
+          <summary>Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `README.md`
+
+Lint results
+
+
+**No lint errors found**
+</details>
+
+---
+
+<think><details><summary>Thought Process</summary>Perfect! I've successfully made all the requested corrections to the README file. Let me summarize what I've changed:
+
+1. ✅ Updated the deployment badges to show Netlify for frontend and Railway for backend
+2. ✅ Removed the broken demo GIF placeholder link that was causing the proxy error
+3. ✅ Updated all references from Vercel to Netlify in the deployment sections
+4. ✅ Updated the acknowledgments section to mention both Netlify and Railway
+5. ✅ Updated the footer to reflect that Rasheed Lewis is the sole engineer
+6. ✅ Updated the contact information with his correct Twitter handle (@RasheedLLewis) and email (me@rasheedlewis.com)
+
+All changes have been completed successfully with no linting errors.</details></think>
+
+---
+
+Perfect! I've made all the requested corrections to the README file:
+
+## ✅ Changes Made:
+
+1. **Updated deployment information:**
+   - Changed badges to show **Netlify** for frontend and **Railway** for backend
+   - Updated deployment instructions to use `netlify deploy` instead of `vercel deploy`
+   - Updated acknowledgments section to mention both platforms
+
+2. **Fixed the demo section:**
+   - Removed the broken demo GIF placeholder link that was causing the proxy error
+   - Kept the live demo link and the helpful instruction about opening multiple browser windows
+
+3. **Updated contact information:**
+   - Changed footer to reflect **Rasheed Lewis** as the sole engineer
+   - Updated email to **me@rasheedlewis.com**
+   - Updated Twitter handle to **@RasheedLLewis**
+
+The README now accurately reflects:
+- Frontend deployed on **Netlify** ✅
+- Backend deployed on **Railway** ✅  
+- No broken demo GIF link ✅
+- Proper attribution to **Rasheed Lewis** with correct contact details ✅
+
+All changes have been applied successfully with no linting errors! 🚀
+
+---
+
+_**User (2025-10-17 16:02Z)**_
+
+What command do I need to use to push this amended change?
+
+---
+
+_**Assistant (claude-4-sonnet-thinking)**_
+
+<think><details><summary>Thought Process</summary>The user has a git situation where:
+
+1. They made changes to the README.md file
+2. They added the changes with `git add .`
+3. They amended the commit with `git commit --amend`
+4. They tried to push with `git push` but it was rejected because the local branch is behind the remote
+5. They tried `git pull` but got an error about divergent branches needing to specify how to reconcile them
+
+The issue is that after amending a commit that was already pushed, the local and remote histories have diverged. The amended commit has a different hash than the original commit on the remote.
+
+Since they amended a commit, they need to force push to overwrite the remote branch. The safest way to do this is with `git push --force-with-lease` which will only force push if no one else has pushed changes to the remote in the meantime.
+
+Alternatively, they could:
+1. First configure git to handle the pull, then pull and merge/rebase, then push
+2. Or just force push since this appears to be their own repository
+
+Given that this seems to be their own repository (RasheedLewis/collab-canvas), and they just amended a commit, the most straightforward solution is to force push.</details></think>
+
+---
+
+Based on the terminal output, you have divergent branches because you amended a commit that was already pushed to the remote repository. Since you amended the commit, the commit hash changed, creating a conflict with the remote branch.
+
+You have a few options to resolve this:
+
+## **Option 1: Force Push (Recommended for solo projects)**
+
+Since this appears to be your own repository and you just amended a commit, you can safely force push:
+
+```bash
+git push --force-with-lease
+```
+
+The `--force-with-lease` is safer than `--force` because it will only force push if no one else has made changes to the remote branch since your last fetch.
+
+## **Option 2: If you want to be extra cautious**
+
+If you prefer to merge the remote changes first:
+
+```bash
+git config pull.rebase false  # Set merge strategy
+git pull                      # This will create a merge commit
+git push                      # Normal push after merge
+```
+
+## **Option 3: Rebase approach**
+
+If you prefer a cleaner history:
+
+```bash
+git config pull.rebase true   # Set rebase strategy  
+git pull                      # This will rebase your changes
+git push                      # Normal push after rebase
+```
+
+## **Recommendation**
+
+Since you just amended a README commit and this is your own repository, I'd recommend **Option 1** with `git push --force-with-lease`. This is the cleanest solution and will replace the remote commit with your amended version.
+
+```bash
+git push --force-with-lease
+```
+
+This will successfully push your updated README with all the corrections we made! 🚀
+
+---
+

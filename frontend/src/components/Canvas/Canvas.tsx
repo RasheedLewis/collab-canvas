@@ -111,12 +111,30 @@ const Canvas: React.FC<CanvasProps> = ({
     lastUpdate: number;
   }>>(new Map());
 
+  // State for tracking interpolating object movements
+  const [interpolatingObjects, setInterpolatingObjects] = useState<Map<string, {
+    // Current interpolated position (for smooth rendering)
+    x: number;
+    y: number;
+    // Target position (from network updates)
+    targetX: number;
+    targetY: number;
+    // Previous position (for velocity calculation)
+    prevX: number;
+    prevY: number;
+    // Interpolation tracking
+    startTime: number;
+    duration: number;
+    objectId: string;
+    userId: string; // User who moved the object
+  }>>(new Map());
+
   // Cursor throttling state
   const lastCursorUpdateRef = useRef<number>(0);
   const lastCursorPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const cursorThrottleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Animation frame state for smooth cursor interpolation
+  // Animation frame state for smooth cursor and object interpolation
   const animationFrameRef = useRef<number | null>(null);
   const [, forceRerender] = useState({});
 
@@ -192,11 +210,22 @@ const Canvas: React.FC<CanvasProps> = ({
     return start + (end - start) * t;
   };
 
-  // Animation loop for smooth cursor interpolation
-  const animateCursors = useCallback(() => {
-    const now = Date.now();
-    let needsUpdate = false;
+  // Helper function to get interpolated position for an object
+  const getObjectRenderPosition = useCallback((objectId: string, defaultX: number, defaultY: number) => {
+    const interpolation = interpolatingObjects.get(objectId);
+    if (interpolation) {
+      return { x: interpolation.x, y: interpolation.y };
+    }
+    return { x: defaultX, y: defaultY };
+  }, [interpolatingObjects]);
 
+  // Animation loop for smooth cursor and object interpolation
+  const animateInterpolations = useCallback(() => {
+    const now = Date.now();
+    let needsCursorUpdate = false;
+    let needsObjectUpdate = false;
+
+    // Animate cursors
     setOtherCursors(prev => {
       const updated = new Map(prev);
       
@@ -214,29 +243,77 @@ const Canvas: React.FC<CanvasProps> = ({
           if (Math.abs(newX - cursor.x) > 0.1 || Math.abs(newY - cursor.y) > 0.1) {
             cursor.x = newX;
             cursor.y = newY;
-            needsUpdate = true;
+            needsCursorUpdate = true;
           }
         } else if (cursor.x !== cursor.targetX || cursor.y !== cursor.targetY) {
           // Snap to final position
           cursor.x = cursor.targetX;
           cursor.y = cursor.targetY;
-          needsUpdate = true;
+          needsCursorUpdate = true;
         }
       }
       
-      return needsUpdate ? updated : prev;
+      return needsCursorUpdate ? updated : prev;
     });
 
-    // Continue animation if any cursors are still moving
-    if (otherCursors.size > 0) {
-      animationFrameRef.current = requestAnimationFrame(animateCursors);
-    }
-  }, [otherCursors.size]);
+    // Animate objects
+    setInterpolatingObjects(prev => {
+      const updated = new Map(prev);
+      const toRemove = new Set<string>();
+      
+      for (const [objectId, interpolation] of updated.entries()) {
+        const timePassed = now - interpolation.startTime;
+        const progress = Math.min(timePassed / interpolation.duration, 1);
+        
+        if (progress < 1) {
+          // Apply easing for smooth movement
+          const easedProgress = easeOutQuad(progress);
+          
+          const newX = lerp(interpolation.prevX, interpolation.targetX, easedProgress);
+          const newY = lerp(interpolation.prevY, interpolation.targetY, easedProgress);
+          
+          if (Math.abs(newX - interpolation.x) > 0.1 || Math.abs(newY - interpolation.y) > 0.1) {
+            interpolation.x = newX;
+            interpolation.y = newY;
+            needsObjectUpdate = true;
+          }
+        } else {
+          // Snap to final position and update the actual object
+          interpolation.x = interpolation.targetX;
+          interpolation.y = interpolation.targetY;
+          
+          // Update the actual object in the store
+          updateObject(objectId, { 
+            x: interpolation.targetX, 
+            y: interpolation.targetY 
+          });
+          
+          // Mark for removal from interpolation
+          toRemove.add(objectId);
+          needsObjectUpdate = true;
+        }
+      }
+      
+      // Remove completed interpolations
+      if (toRemove.size > 0) {
+        for (const objectId of toRemove) {
+          updated.delete(objectId);
+        }
+      }
+      
+      return needsObjectUpdate ? updated : prev;
+    });
 
-  // Start animation loop when cursors are present
+    // Continue animation if any cursors or objects are still moving
+    if (otherCursors.size > 0 || interpolatingObjects.size > 0) {
+      animationFrameRef.current = requestAnimationFrame(animateInterpolations);
+    }
+  }, [otherCursors.size, interpolatingObjects.size, updateObject]);
+
+  // Start animation loop when cursors or objects are present
   useEffect(() => {
-    if (otherCursors.size > 0 && !animationFrameRef.current) {
-      animationFrameRef.current = requestAnimationFrame(animateCursors);
+    if ((otherCursors.size > 0 || interpolatingObjects.size > 0) && !animationFrameRef.current) {
+      animationFrameRef.current = requestAnimationFrame(animateInterpolations);
     }
     
     return () => {
@@ -245,7 +322,7 @@ const Canvas: React.FC<CanvasProps> = ({
         animationFrameRef.current = null;
       }
     };
-  }, [otherCursors.size, animateCursors]);
+  }, [otherCursors.size, interpolatingObjects.size, animateInterpolations]);
 
   // Handle window resize
   useEffect(() => {
@@ -537,7 +614,47 @@ const Canvas: React.FC<CanvasProps> = ({
       // Don't update our own moves (they're already in the store)  
       if (payload.userId === clientId) return;
       
-      updateObject(payload.objectId, { x: payload.x, y: payload.y });
+      const now = Date.now();
+      const currentObject = objects.find(obj => obj.id === payload.objectId);
+      
+      if (!currentObject) {
+        // Object not found, just update directly
+        updateObject(payload.objectId, { x: payload.x, y: payload.y });
+        return;
+      }
+
+      // Check if this object is already interpolating
+      const existingInterpolation = interpolatingObjects.get(payload.objectId);
+      
+      // Calculate distance to determine animation duration
+      const fromX = existingInterpolation ? existingInterpolation.x : currentObject.x;
+      const fromY = existingInterpolation ? existingInterpolation.y : currentObject.y;
+      const distance = Math.sqrt(
+        Math.pow(payload.x - fromX, 2) + 
+        Math.pow(payload.y - fromY, 2)
+      );
+      
+      // Adaptive duration based on distance (min 100ms, max 400ms for objects)
+      // Objects are typically larger movements than cursors, so slightly longer duration
+      const duration = Math.max(100, Math.min(400, distance * 3));
+
+      // Set up interpolation
+      setInterpolatingObjects(prev => {
+        const updated = new Map(prev);
+        updated.set(payload.objectId, {
+          x: fromX, // Current interpolated position
+          y: fromY,
+          prevX: fromX, // Current position becomes previous
+          prevY: fromY,
+          targetX: payload.x, // New target position
+          targetY: payload.y,
+          startTime: now,
+          duration,
+          objectId: payload.objectId,
+          userId: payload.userId
+        });
+        return updated;
+      });
     });
 
     const unsubscribeObjectUpdated = onObjectUpdated((payload) => {
@@ -921,27 +1038,48 @@ const Canvas: React.FC<CanvasProps> = ({
           
           {/* Render canvas objects */}
           {objects.map((obj) => {
+            // Get interpolated position for smooth movement
+            const renderPos = getObjectRenderPosition(obj.id, obj.x, obj.y);
+            
             if (obj.type === 'rectangle') {
+              const rectangleWithInterpolation = {
+                ...obj,
+                x: renderPos.x,
+                y: renderPos.y
+              } as RectangleObject;
+              
               return (
                 <CanvasRectangle 
                   key={obj.id} 
-                  rectangle={obj as RectangleObject}
+                  rectangle={rectangleWithInterpolation}
                   onMove={moveObjectWithSync}
                 />
               );
             } else if (obj.type === 'circle') {
+              const circleWithInterpolation = {
+                ...obj,
+                x: renderPos.x,
+                y: renderPos.y
+              } as CircleObject;
+              
               return (
                 <CanvasCircle 
                   key={obj.id} 
-                  circle={obj as CircleObject}
+                  circle={circleWithInterpolation}
                   onMove={moveObjectWithSync}
                 />
               );
             } else if (obj.type === 'text') {
+              const textWithInterpolation = {
+                ...obj,
+                x: renderPos.x,
+                y: renderPos.y
+              } as TextObject;
+              
               return (
                 <CanvasText 
                   key={obj.id} 
-                  textObject={obj as TextObject}
+                  textObject={textWithInterpolation}
                   onMove={moveObjectWithSync}
                   onTextChanged={changeTextWithSync}
                 />
