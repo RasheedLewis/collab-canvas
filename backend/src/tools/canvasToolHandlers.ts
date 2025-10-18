@@ -527,101 +527,469 @@ export async function deleteObject(context: ToolContext): Promise<any> {
  */
 
 export async function getCanvasState(context: ToolContext): Promise<any> {
-    const { roomId } = context;
+    const { roomId, includeMetadata = false } = context;
 
-    const canvasState = await persistenceService.getCanvasState(roomId) || { roomId, objects: [], lastUpdated: Date.now(), version: 1 };
+    // Input validation
+    if (!roomId || typeof roomId !== 'string') {
+        throw new Error('Room ID must be a valid string');
+    }
+
+    const canvasState = await persistenceService.getCanvasState(roomId) || {
+        roomId,
+        objects: [],
+        lastUpdated: Date.now(),
+        version: 1
+    };
+
+    // Calculate comprehensive canvas statistics
+    const statistics = {
+        objectCount: canvasState.objects.length,
+        objectTypes: {} as Record<string, number>,
+        colors: new Set<string>(),
+        totalArea: 0,
+        averageSize: 0,
+        textObjects: 0,
+        totalTextLength: 0
+    };
+
+    let totalObjectArea = 0;
+    const objectDetails = canvasState.objects.map((obj: any) => {
+        // Count object types
+        statistics.objectTypes[obj.type] = (statistics.objectTypes[obj.type] || 0) + 1;
+
+        // Collect colors
+        if (obj.color) statistics.colors.add(obj.color);
+        if (obj.fill) statistics.colors.add(obj.fill);
+        if (obj.stroke) statistics.colors.add(obj.stroke);
+
+        // Calculate object area and collect text stats
+        let objectArea = 0;
+        if (obj.type === 'rectangle') {
+            objectArea = obj.width * obj.height;
+        } else if (obj.type === 'circle') {
+            objectArea = Math.PI * obj.radius * obj.radius;
+        } else if (obj.type === 'text') {
+            statistics.textObjects++;
+            if (obj.text) {
+                statistics.totalTextLength += obj.text.length;
+            }
+            // Estimate text area
+            const estimatedWidth = (obj.text?.length || 0) * (obj.fontSize * 0.6);
+            const estimatedHeight = obj.fontSize * 1.2;
+            objectArea = estimatedWidth * estimatedHeight;
+        }
+
+        totalObjectArea += objectArea;
+
+        // Return object with optional metadata
+        const result: any = {
+            id: obj.id,
+            type: obj.type,
+            position: { x: obj.x, y: obj.y },
+            ...(obj.type === 'rectangle' && {
+                dimensions: { width: obj.width, height: obj.height },
+                area: obj.width * obj.height
+            }),
+            ...(obj.type === 'circle' && {
+                radius: obj.radius,
+                area: Math.PI * obj.radius * obj.radius
+            }),
+            ...(obj.type === 'text' && {
+                text: obj.text,
+                fontSize: obj.fontSize,
+                fontFamily: obj.fontFamily || 'Arial'
+            }),
+            color: obj.color || obj.fill,
+            ...(obj.stroke && { stroke: obj.stroke }),
+            ...(obj.rotation && { rotation: obj.rotation })
+        };
+
+        if (includeMetadata) {
+            result.metadata = {
+                createdAt: obj.createdAt,
+                updatedAt: obj.updatedAt,
+                createdBy: (obj as any).createdBy,
+                ...(obj.updatedBy && { updatedBy: obj.updatedBy })
+            };
+        }
+
+        return result;
+    });
+
+    statistics.totalArea = totalObjectArea;
+    statistics.averageSize = statistics.objectCount > 0 ? totalObjectArea / statistics.objectCount : 0;
+
+    // Calculate canvas bounds
+    let bounds = null;
+    if (canvasState.objects.length > 0) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        canvasState.objects.forEach((obj: any) => {
+            minX = Math.min(minX, obj.x);
+            minY = Math.min(minY, obj.y);
+
+            if (obj.type === 'rectangle') {
+                maxX = Math.max(maxX, obj.x + obj.width);
+                maxY = Math.max(maxY, obj.y + obj.height);
+            } else if (obj.type === 'circle') {
+                maxX = Math.max(maxX, obj.x + obj.radius * 2);
+                maxY = Math.max(maxY, obj.y + obj.radius * 2);
+            } else if (obj.type === 'text') {
+                const estimatedWidth = (obj.text?.length || 0) * (obj.fontSize * 0.6);
+                const estimatedHeight = obj.fontSize * 1.2;
+                maxX = Math.max(maxX, obj.x + estimatedWidth);
+                maxY = Math.max(maxY, obj.y + estimatedHeight);
+            }
+        });
+
+        bounds = {
+            minX, minY, maxX, maxY,
+            width: maxX - minX,
+            height: maxY - minY,
+            center: {
+                x: (minX + maxX) / 2,
+                y: (minY + maxY) / 2
+            }
+        };
+    }
 
     return {
         success: true,
-        roomId,
-        objectCount: canvasState.objects.length,
-        objects: canvasState.objects,
-        message: `Retrieved canvas state with ${canvasState.objects.length} objects`
+        result: {
+            roomId,
+            objectCount: statistics.objectCount,
+            objects: objectDetails,
+            statistics: {
+                ...statistics,
+                colors: Array.from(statistics.colors),
+                averageTextLength: statistics.textObjects > 0 ?
+                    Math.round(statistics.totalTextLength / statistics.textObjects) : 0
+            },
+            bounds,
+            ...(includeMetadata && {
+                canvasMetadata: {
+                    lastUpdated: canvasState.lastUpdated,
+                    version: canvasState.version
+                }
+            })
+        },
+        message: `Retrieved canvas state: ${statistics.objectCount} objects (${Object.entries(statistics.objectTypes).map(([type, count]) => `${count} ${type}${count > 1 ? 's' : ''}`).join(', ') || 'empty canvas'})`
     };
 }
 
 export async function findObjects(context: ToolContext): Promise<any> {
-    const { roomId, type, color, text } = context;
+    const { roomId, type, color, text, area } = context;
 
-    const canvasState = await persistenceService.getCanvasState(roomId) || { roomId, objects: [], lastUpdated: Date.now(), version: 1 };
+    // Input validation
+    if (!roomId || typeof roomId !== 'string') {
+        throw new Error('Room ID must be a valid string');
+    }
+
+    const canvasState = await persistenceService.getCanvasState(roomId) || {
+        roomId,
+        objects: [],
+        lastUpdated: Date.now(),
+        version: 1
+    };
+
     let filteredObjects = canvasState.objects;
+    const appliedFilters: any = {};
 
     // Filter by type
     if (type) {
+        if (!['rectangle', 'circle', 'text'].includes(type)) {
+            throw new Error('Invalid object type. Must be "rectangle", "circle", or "text"');
+        }
         filteredObjects = filteredObjects.filter((obj: any) => obj.type === type);
+        appliedFilters.type = type;
     }
 
-    // Filter by color (fill or stroke)
+    // Filter by color (check color, fill, and stroke)
     if (color) {
+        if (typeof color !== 'string') {
+            throw new Error('Color must be a string');
+        }
         filteredObjects = filteredObjects.filter((obj: any) =>
-            obj.fill === color || obj.stroke === color
+            obj.color === color || obj.fill === color || obj.stroke === color
         );
+        appliedFilters.color = color;
     }
 
-    // Filter by text content
+    // Filter by text content (case-insensitive partial match)
     if (text) {
+        if (typeof text !== 'string') {
+            throw new Error('Text search must be a string');
+        }
+        const searchText = text.toLowerCase();
         filteredObjects = filteredObjects.filter((obj: any) =>
-            obj.type === 'text' && obj.text && obj.text.toLowerCase().includes(text.toLowerCase())
+            obj.type === 'text' && obj.text &&
+            obj.text.toLowerCase().includes(searchText)
         );
+        appliedFilters.text = text;
     }
+
+    // Filter by area (bounding box search)
+    if (area) {
+        const { x: areaX, y: areaY, width: areaWidth, height: areaHeight } = area;
+
+        // Validate area parameters
+        if (typeof areaX !== 'number' || typeof areaY !== 'number' ||
+            typeof areaWidth !== 'number' || typeof areaHeight !== 'number') {
+            throw new Error('Area parameters (x, y, width, height) must be numbers');
+        }
+        if (areaWidth <= 0 || areaHeight <= 0) {
+            throw new Error('Area width and height must be positive numbers');
+        }
+
+        const areaRight = areaX + areaWidth;
+        const areaBottom = areaY + areaHeight;
+
+        filteredObjects = filteredObjects.filter((obj: any) => {
+            // Check if object intersects with the search area
+            let objRight: number, objBottom: number;
+
+            if (obj.type === 'rectangle') {
+                objRight = obj.x + obj.width;
+                objBottom = obj.y + obj.height;
+            } else if (obj.type === 'circle') {
+                objRight = obj.x + obj.radius * 2;
+                objBottom = obj.y + obj.radius * 2;
+            } else if (obj.type === 'text') {
+                const estimatedWidth = (obj.text?.length || 0) * (obj.fontSize * 0.6);
+                const estimatedHeight = obj.fontSize * 1.2;
+                objRight = obj.x + estimatedWidth;
+                objBottom = obj.y + estimatedHeight;
+            } else {
+                return false;
+            }
+
+            // Check for intersection
+            return !(obj.x >= areaRight || objRight <= areaX ||
+                obj.y >= areaBottom || objBottom <= areaY);
+        });
+
+        appliedFilters.area = { x: areaX, y: areaY, width: areaWidth, height: areaHeight };
+    }
+
+    // Enhance result objects with additional computed properties
+    const enhancedObjects = filteredObjects.map((obj: any) => {
+        const result: any = {
+            id: obj.id,
+            type: obj.type,
+            position: { x: obj.x, y: obj.y },
+            color: obj.color || obj.fill
+        };
+
+        // Add type-specific properties and calculated area
+        if (obj.type === 'rectangle') {
+            result.dimensions = { width: obj.width, height: obj.height };
+            result.area = obj.width * obj.height;
+        } else if (obj.type === 'circle') {
+            result.radius = obj.radius;
+            result.area = Math.PI * obj.radius * obj.radius;
+        } else if (obj.type === 'text') {
+            result.text = obj.text;
+            result.fontSize = obj.fontSize;
+            result.fontFamily = obj.fontFamily || 'Arial';
+            const estimatedWidth = (obj.text?.length || 0) * (obj.fontSize * 0.6);
+            const estimatedHeight = obj.fontSize * 1.2;
+            result.estimatedArea = estimatedWidth * estimatedHeight;
+        }
+
+        // Add optional properties
+        if (obj.stroke) result.stroke = obj.stroke;
+        if (obj.rotation) result.rotation = obj.rotation;
+
+        return result;
+    });
+
+    // Calculate search statistics
+    const searchStats = {
+        totalObjectsInCanvas: canvasState.objects.length,
+        matchCount: filteredObjects.length,
+        matchPercentage: canvasState.objects.length > 0 ?
+            Math.round((filteredObjects.length / canvasState.objects.length) * 100) : 0,
+        objectTypes: {} as Record<string, number>
+    };
+
+    // Count object types in results
+    enhancedObjects.forEach(obj => {
+        searchStats.objectTypes[obj.type] = (searchStats.objectTypes[obj.type] || 0) + 1;
+    });
 
     return {
         success: true,
-        matchCount: filteredObjects.length,
-        objects: filteredObjects,
-        filters: { type, color, text },
-        message: `Found ${filteredObjects.length} objects matching criteria`
+        result: {
+            searchCriteria: appliedFilters,
+            statistics: searchStats,
+            objects: enhancedObjects
+        },
+        message: `Found ${filteredObjects.length} objects matching criteria${Object.keys(appliedFilters).length > 0 ?
+            ` (${Object.entries(appliedFilters).map(([key, value]) =>
+                typeof value === 'object' ? `${key}: ${JSON.stringify(value)}` : `${key}: ${value}`
+            ).join(', ')})` : ''}`
     };
 }
 
 export async function getCanvasBounds(context: ToolContext): Promise<any> {
     const { roomId } = context;
 
-    const canvasState = await persistenceService.getCanvasState(roomId) || { roomId, objects: [], lastUpdated: Date.now(), version: 1 };
+    // Input validation
+    if (!roomId || typeof roomId !== 'string') {
+        throw new Error('Room ID must be a valid string');
+    }
+
+    const canvasState = await persistenceService.getCanvasState(roomId) || {
+        roomId,
+        objects: [],
+        lastUpdated: Date.now(),
+        version: 1
+    };
 
     if (canvasState.objects.length === 0) {
         return {
             success: true,
-            bounds: { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 },
-            message: 'Canvas is empty'
+            result: {
+                roomId,
+                objectCount: 0,
+                bounds: {
+                    minX: 0, minY: 0, maxX: 0, maxY: 0,
+                    width: 0, height: 0,
+                    center: { x: 0, y: 0 },
+                    aspectRatio: 0
+                },
+                distribution: {
+                    objectsByQuadrant: { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0 },
+                    density: 0,
+                    averageDistanceFromCenter: 0
+                }
+            },
+            message: 'Canvas is empty - no bounds to calculate'
         };
     }
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const objectPositions: Array<{ x: number, y: number, centerX: number, centerY: number, area: number }> = [];
 
+    // Calculate bounds and collect object data
     canvasState.objects.forEach((obj: any) => {
-        minX = Math.min(minX, obj.x);
-        minY = Math.min(minY, obj.y);
+        let objCenterX: number, objCenterY: number, objArea: number;
+        let objMaxX: number, objMaxY: number;
 
         if (obj.type === 'rectangle') {
-            maxX = Math.max(maxX, obj.x + obj.width);
-            maxY = Math.max(maxY, obj.y + obj.height);
+            objMaxX = obj.x + obj.width;
+            objMaxY = obj.y + obj.height;
+            objCenterX = obj.x + obj.width / 2;
+            objCenterY = obj.y + obj.height / 2;
+            objArea = obj.width * obj.height;
         } else if (obj.type === 'circle') {
-            maxX = Math.max(maxX, obj.x + obj.radius * 2);
-            maxY = Math.max(maxY, obj.y + obj.radius * 2);
+            objMaxX = obj.x + obj.radius * 2;
+            objMaxY = obj.y + obj.radius * 2;
+            objCenterX = obj.x + obj.radius;
+            objCenterY = obj.y + obj.radius;
+            objArea = Math.PI * obj.radius * obj.radius;
         } else if (obj.type === 'text') {
             // Approximate text bounds
-            const estimatedWidth = obj.text.length * (obj.fontSize * 0.6);
+            const estimatedWidth = (obj.text?.length || 0) * (obj.fontSize * 0.6);
             const estimatedHeight = obj.fontSize * 1.2;
-            maxX = Math.max(maxX, obj.x + estimatedWidth);
-            maxY = Math.max(maxY, obj.y + estimatedHeight);
+            objMaxX = obj.x + estimatedWidth;
+            objMaxY = obj.y + estimatedHeight;
+            objCenterX = obj.x + estimatedWidth / 2;
+            objCenterY = obj.y + estimatedHeight / 2;
+            objArea = estimatedWidth * estimatedHeight;
+        } else {
+            return; // Skip unknown object types
         }
+
+        minX = Math.min(minX, obj.x);
+        minY = Math.min(minY, obj.y);
+        maxX = Math.max(maxX, objMaxX);
+        maxY = Math.max(maxY, objMaxY);
+
+        objectPositions.push({
+            x: obj.x,
+            y: obj.y,
+            centerX: objCenterX,
+            centerY: objCenterY,
+            area: objArea
+        });
     });
 
     const bounds = {
-        minX,
-        minY,
-        maxX,
-        maxY,
-        width: maxX - minX,
-        height: maxY - minY
+        minX: Math.round(minX * 100) / 100,
+        minY: Math.round(minY * 100) / 100,
+        maxX: Math.round(maxX * 100) / 100,
+        maxY: Math.round(maxY * 100) / 100,
+        width: Math.round((maxX - minX) * 100) / 100,
+        height: Math.round((maxY - minY) * 100) / 100,
+        center: {
+            x: Math.round(((minX + maxX) / 2) * 100) / 100,
+            y: Math.round(((minY + maxY) / 2) * 100) / 100
+        },
+        aspectRatio: Math.round(((maxX - minX) / (maxY - minY)) * 100) / 100
+    };
+
+    // Calculate distribution statistics
+    const canvasCenterX = bounds.center.x;
+    const canvasCenterY = bounds.center.y;
+
+    let totalDistanceFromCenter = 0;
+    const objectsByQuadrant = { topLeft: 0, topRight: 0, bottomLeft: 0, bottomRight: 0 };
+
+    objectPositions.forEach(obj => {
+        // Calculate distance from canvas center
+        const distance = Math.sqrt(
+            Math.pow(obj.centerX - canvasCenterX, 2) +
+            Math.pow(obj.centerY - canvasCenterY, 2)
+        );
+        totalDistanceFromCenter += distance;
+
+        // Determine quadrant
+        if (obj.centerX < canvasCenterX && obj.centerY < canvasCenterY) {
+            objectsByQuadrant.topLeft++;
+        } else if (obj.centerX >= canvasCenterX && obj.centerY < canvasCenterY) {
+            objectsByQuadrant.topRight++;
+        } else if (obj.centerX < canvasCenterX && obj.centerY >= canvasCenterY) {
+            objectsByQuadrant.bottomLeft++;
+        } else {
+            objectsByQuadrant.bottomRight++;
+        }
+    });
+
+    const distribution = {
+        objectsByQuadrant,
+        density: bounds.width > 0 && bounds.height > 0 ?
+            Math.round((canvasState.objects.length / (bounds.width * bounds.height)) * 10000) / 10000 : 0,
+        averageDistanceFromCenter: objectPositions.length > 0 ?
+            Math.round((totalDistanceFromCenter / objectPositions.length) * 100) / 100 : 0,
+        spreadX: Math.round((maxX - minX) * 100) / 100,
+        spreadY: Math.round((maxY - minY) * 100) / 100
+    };
+
+    // Calculate padding suggestions for layout operations
+    const paddingSuggestions = {
+        minimal: Math.round(Math.min(bounds.width, bounds.height) * 0.05),
+        comfortable: Math.round(Math.min(bounds.width, bounds.height) * 0.1),
+        generous: Math.round(Math.min(bounds.width, bounds.height) * 0.2)
     };
 
     return {
         success: true,
-        bounds,
-        objectCount: canvasState.objects.length,
-        message: `Canvas bounds: ${bounds.width}×${bounds.height}`
+        result: {
+            roomId,
+            objectCount: canvasState.objects.length,
+            bounds,
+            distribution,
+            layoutInfo: {
+                usableArea: bounds.width * bounds.height,
+                perimeterLength: 2 * (bounds.width + bounds.height),
+                paddingSuggestions,
+                isSquareish: Math.abs(bounds.aspectRatio - 1) < 0.2,
+                isLandscape: bounds.aspectRatio > 1.2,
+                isPortrait: bounds.aspectRatio < 0.8
+            }
+        },
+        message: `Canvas bounds: ${bounds.width}×${bounds.height} (${canvasState.objects.length} objects, density: ${distribution.density.toFixed(4)} objects/px²)`
     };
 }
 
