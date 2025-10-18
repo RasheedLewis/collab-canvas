@@ -38,8 +38,21 @@ let globalResetTime = Date.now() + RATE_LIMIT_CONFIG.windowMs;
  */
 export async function aiAuthMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-        // Use existing auth verification
-        await verifyAuthToken(req as any, res, () => { });
+        // Use existing auth verification with proper callback handling
+        await new Promise<void>((resolve, reject) => {
+            verifyAuthToken(req as any, res, (error?: any) => {
+                if (error) {
+                    reject(error);
+                } else {
+                    resolve();
+                }
+            });
+        });
+
+        // Check if response was already sent by verifyAuthToken
+        if (res.headersSent) {
+            return;
+        }
 
         // Ensure user ID is available
         if (!req.user?.uid) {
@@ -52,10 +65,13 @@ export async function aiAuthMiddleware(req: Request, res: Response, next: NextFu
         next();
     } catch (error) {
         console.error('AI Auth Middleware Error:', error);
-        res.status(401).json({
-            error: 'Authentication failed',
-            message: error instanceof Error ? error.message : 'Unknown auth error'
-        });
+        // Only send response if headers haven't been sent yet
+        if (!res.headersSent) {
+            res.status(401).json({
+                error: 'Authentication failed',
+                message: error instanceof Error ? error.message : 'Unknown auth error'
+            });
+        }
     }
 }
 

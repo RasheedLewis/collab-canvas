@@ -42,7 +42,30 @@ function broadcastObjectUpdate(roomId: string, userId: string, messageType: stri
  */
 
 export async function createRectangle(context: ToolContext): Promise<any> {
-    const { x, y, width, height, fill = '#3B82F6', stroke = '#1E40AF', roomId, userId } = context;
+    const {
+        x, y, width, height,
+        color = '#3B82F6',
+        strokeColor = '#1E40AF',
+        strokeWidth = 2,
+        roomId, userId
+    } = context;
+
+    // Input validation
+    if (typeof x !== 'number' || typeof y !== 'number') {
+        throw new Error('Position coordinates (x, y) must be numbers');
+    }
+    if (typeof width !== 'number' || width <= 0) {
+        throw new Error('Width must be a positive number');
+    }
+    if (typeof height !== 'number' || height <= 0) {
+        throw new Error('Height must be a positive number');
+    }
+    if (color && !/^#[0-9A-Fa-f]{6}$/.test(color)) {
+        throw new Error('Color must be a valid hex color (e.g., #3B82F6)');
+    }
+    if (strokeColor && !/^#[0-9A-Fa-f]{6}$/.test(strokeColor)) {
+        throw new Error('Stroke color must be a valid hex color (e.g., #1E40AF)');
+    }
 
     const rectangle = {
         id: generateObjectId(),
@@ -51,10 +74,10 @@ export async function createRectangle(context: ToolContext): Promise<any> {
         y: Number(y),
         width: Number(width),
         height: Number(height),
-        color: fill, // Use color field as expected by interface
-        fill,
-        stroke,
-        strokeWidth: 2,
+        color: color, // Use color field as expected by interface
+        fill: color,
+        stroke: strokeColor,
+        strokeWidth: Number(strokeWidth),
         rotation: 0,
         createdBy: userId,
         createdAt: Date.now(),
@@ -76,7 +99,27 @@ export async function createRectangle(context: ToolContext): Promise<any> {
 }
 
 export async function createCircle(context: ToolContext): Promise<any> {
-    const { x, y, radius, fill = '#10B981', stroke = '#047857', roomId, userId } = context;
+    const {
+        x, y, radius,
+        color = '#10B981',
+        strokeColor = '#047857',
+        strokeWidth = 2,
+        roomId, userId
+    } = context;
+
+    // Input validation
+    if (typeof x !== 'number' || typeof y !== 'number') {
+        throw new Error('Position coordinates (x, y) must be numbers');
+    }
+    if (typeof radius !== 'number' || radius <= 0) {
+        throw new Error('Radius must be a positive number');
+    }
+    if (color && !/^#[0-9A-Fa-f]{6}$/.test(color)) {
+        throw new Error('Color must be a valid hex color (e.g., #10B981)');
+    }
+    if (strokeColor && !/^#[0-9A-Fa-f]{6}$/.test(strokeColor)) {
+        throw new Error('Stroke color must be a valid hex color (e.g., #047857)');
+    }
 
     const circle = {
         id: generateObjectId(),
@@ -84,10 +127,10 @@ export async function createCircle(context: ToolContext): Promise<any> {
         x: Number(x),
         y: Number(y),
         radius: Number(radius),
-        color: fill, // Use color field as expected by interface
-        fill,
-        stroke,
-        strokeWidth: 2,
+        color: color, // Use color field as expected by interface
+        fill: color,
+        stroke: strokeColor,
+        strokeWidth: Number(strokeWidth),
         rotation: 0,
         createdBy: userId,
         createdAt: Date.now(),
@@ -109,7 +152,30 @@ export async function createCircle(context: ToolContext): Promise<any> {
 }
 
 export async function createText(context: ToolContext): Promise<any> {
-    const { x, y, text, fontSize = 16, fill = '#1F2937', fontFamily = 'Arial', roomId, userId } = context;
+    const {
+        x, y, text,
+        fontSize = 16,
+        color = '#1F2937',
+        fontFamily = 'Arial',
+        roomId, userId
+    } = context;
+
+    // Input validation
+    if (typeof x !== 'number' || typeof y !== 'number') {
+        throw new Error('Position coordinates (x, y) must be numbers');
+    }
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+        throw new Error('Text content must be a non-empty string');
+    }
+    if (typeof fontSize !== 'number' || fontSize <= 0 || fontSize > 200) {
+        throw new Error('Font size must be a positive number between 1 and 200');
+    }
+    if (color && !/^#[0-9A-Fa-f]{6}$/.test(color)) {
+        throw new Error('Color must be a valid hex color (e.g., #1F2937)');
+    }
+    if (fontFamily && typeof fontFamily !== 'string') {
+        throw new Error('Font family must be a string');
+    }
 
     const textObject = {
         id: generateObjectId(),
@@ -119,8 +185,8 @@ export async function createText(context: ToolContext): Promise<any> {
         text: String(text),
         fontSize: Number(fontSize),
         fontFamily,
-        color: fill, // Use color field as expected by interface
-        fill,
+        color: color, // Use color field as expected by interface
+        fill: color,
         rotation: 0,
         createdBy: userId,
         createdAt: Date.now(),

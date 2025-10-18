@@ -1,0 +1,810 @@
+{
+    "ai_canvas_tools": [
+        {
+            "type": "function",
+            "function": {
+                "name": "createRectangle",
+                "description": "Create a rectangle on the canvas",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "x": {
+                            "type": "number",
+                            "description": "X position in pixels"
+                        },
+                        "y": {
+                            "type": "number",
+                            "description": "Y position in pixels"
+                        },
+                        "width": {
+                            "type": "number",
+                            "description": "Width in pixels"
+                        },
+                        "height": {
+                            "type": "number",
+                            "description": "Height in pixels"
+                        },
+                        "color": {
+                            "type": "string",
+                            "description": "Fill color (hex, rgb, or color name)"
+                        },
+                        "strokeColor": {
+                            "type": "string",
+                            "description": "Border color (optional)"
+                        },
+                        "strokeWidth": {
+                            "type": "number",
+                            "description": "Border width in pixels (optional)"
+                        }
+                    },
+                    "required": [
+                        "x",
+                        "y",
+                        "width",
+                        "height",
+                        "color"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "createCircle",
+                "description": "Create a circle on the canvas",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "x": {
+                            "type": "number",
+                            "description": "Center X position in pixels"
+                        },
+                        "y": {
+                            "type": "number",
+                            "description": "Center Y position in pixels"
+                        },
+                        "radius": {
+                            "type": "number",
+                            "description": "Radius in pixels"
+                        },
+                        "color": {
+                            "type": "string",
+                            "description": "Fill color (hex, rgb, or color name)"
+                        },
+                        "strokeColor": {
+                            "type": "string",
+                            "description": "Border color (optional)"
+                        },
+                        "strokeWidth": {
+                            "type": "number",
+                            "description": "Border width in pixels (optional)"
+                        }
+                    },
+                    "required": [
+                        "x",
+                        "y",
+                        "radius",
+                        "color"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "createText",
+                "description": "Create text on the canvas",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "description": "Text content to display"
+                        },
+                        "x": {
+                            "type": "number",
+                            "description": "X position in pixels"
+                        },
+                        "y": {
+                            "type": "number",
+                            "description": "Y position in pixels"
+                        },
+                        "fontSize": {
+                            "type": "number",
+                            "description": "Font size in pixels",
+                            "default": 16
+                        },
+                        "fontFamily": {
+                            "type": "string",
+                            "description": "Font family name",
+                            "default": "Arial"
+                        },
+                        "color": {
+                            "type": "string",
+                            "description": "Text color",
+                            "default": "#000000"
+                        },
+                        "fontStyle": {
+                            "type": "string",
+                            "enum": [
+                                "normal",
+                                "bold",
+                                "italic"
+                            ],
+                            "description": "Font style",
+                            "default": "normal"
+                        }
+                    },
+                    "required": [
+                        "text",
+                        "x",
+                        "y"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "moveObject",
+                "description": "Move an existing object to a new position",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "objectId": {
+                            "type": "string",
+                            "description": "Unique identifier of the object to move"
+                        },
+                        "x": {
+                            "type": "number",
+                            "description": "New X position in pixels"
+                        },
+                        "y": {
+                            "type": "number",
+                            "description": "New Y position in pixels"
+                        }
+                    },
+                    "required": [
+                        "objectId",
+                        "x",
+                        "y"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "resizeObject",
+                "description": "Resize an existing object",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "objectId": {
+                            "type": "string",
+                            "description": "Unique identifier of the object to resize"
+                        },
+                        "width": {
+                            "type": "number",
+                            "description": "New width in pixels (for rectangles)"
+                        },
+                        "height": {
+                            "type": "number",
+                            "description": "New height in pixels (for rectangles)"
+                        },
+                        "radius": {
+                            "type": "number",
+                            "description": "New radius in pixels (for circles)"
+                        },
+                        "fontSize": {
+                            "type": "number",
+                            "description": "New font size in pixels (for text)"
+                        }
+                    },
+                    "required": [
+                        "objectId"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "rotateObject",
+                "description": "Rotate an existing object",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "objectId": {
+                            "type": "string",
+                            "description": "Unique identifier of the object to rotate"
+                        },
+                        "rotation": {
+                            "type": "number",
+                            "description": "Rotation angle in degrees (0-360)"
+                        }
+                    },
+                    "required": [
+                        "objectId",
+                        "rotation"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "deleteObject",
+                "description": "Delete an object from the canvas",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "objectId": {
+                            "type": "string",
+                            "description": "Unique identifier of the object to delete"
+                        }
+                    },
+                    "required": [
+                        "objectId"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "getCanvasState",
+                "description": "Get the current state of the canvas with all objects for context",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "includeMetadata": {
+                            "type": "boolean",
+                            "description": "Include creation timestamps and user information",
+                            "default": false
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "findObjects",
+                "description": "Find objects on the canvas matching specific criteria",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": [
+                                "rectangle",
+                                "circle",
+                                "text"
+                            ],
+                            "description": "Filter by object type"
+                        },
+                        "color": {
+                            "type": "string",
+                            "description": "Filter by color"
+                        },
+                        "text": {
+                            "type": "string",
+                            "description": "Filter by text content (for text objects)"
+                        },
+                        "area": {
+                            "type": "object",
+                            "properties": {
+                                "x": {
+                                    "type": "number"
+                                },
+                                "y": {
+                                    "type": "number"
+                                },
+                                "width": {
+                                    "type": "number"
+                                },
+                                "height": {
+                                    "type": "number"
+                                }
+                            },
+                            "description": "Bounding area to search within"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "getCanvasBounds",
+                "description": "Get canvas dimensions and current viewport information",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "arrangeObjectsInRow",
+                "description": "Arrange multiple objects horizontally in a row",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "objectIds": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Array of object IDs to arrange"
+                        },
+                        "startX": {
+                            "type": "number",
+                            "description": "Starting X position for the row"
+                        },
+                        "y": {
+                            "type": "number",
+                            "description": "Y position for the row"
+                        },
+                        "spacing": {
+                            "type": "number",
+                            "description": "Space between objects in pixels",
+                            "default": 20
+                        },
+                        "alignment": {
+                            "type": "string",
+                            "enum": [
+                                "top",
+                                "center",
+                                "bottom"
+                            ],
+                            "description": "Vertical alignment of objects",
+                            "default": "center"
+                        }
+                    },
+                    "required": [
+                        "objectIds",
+                        "startX",
+                        "y"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "arrangeObjectsInGrid",
+                "description": "Arrange multiple objects in a grid pattern",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "objectIds": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Array of object IDs to arrange"
+                        },
+                        "startX": {
+                            "type": "number",
+                            "description": "Grid starting X position"
+                        },
+                        "startY": {
+                            "type": "number",
+                            "description": "Grid starting Y position"
+                        },
+                        "columns": {
+                            "type": "number",
+                            "description": "Number of columns in the grid"
+                        },
+                        "spacingX": {
+                            "type": "number",
+                            "description": "Horizontal spacing between objects",
+                            "default": 20
+                        },
+                        "spacingY": {
+                            "type": "number",
+                            "description": "Vertical spacing between objects",
+                            "default": 20
+                        }
+                    },
+                    "required": [
+                        "objectIds",
+                        "startX",
+                        "startY",
+                        "columns"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "alignObjects",
+                "description": "Align multiple objects along a specific axis",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "objectIds": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Array of object IDs to align"
+                        },
+                        "alignment": {
+                            "type": "string",
+                            "enum": [
+                                "left",
+                                "center",
+                                "right",
+                                "top",
+                                "middle",
+                                "bottom"
+                            ],
+                            "description": "Type of alignment to apply"
+                        },
+                        "referencePoint": {
+                            "type": "number",
+                            "description": "Optional reference coordinate for alignment"
+                        }
+                    },
+                    "required": [
+                        "objectIds",
+                        "alignment"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "distributeObjects",
+                "description": "Distribute objects evenly along an axis",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "objectIds": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Array of object IDs to distribute"
+                        },
+                        "direction": {
+                            "type": "string",
+                            "enum": [
+                                "horizontal",
+                                "vertical"
+                            ],
+                            "description": "Direction of distribution"
+                        },
+                        "startPosition": {
+                            "type": "number",
+                            "description": "Starting position coordinate"
+                        },
+                        "endPosition": {
+                            "type": "number",
+                            "description": "Ending position coordinate"
+                        }
+                    },
+                    "required": [
+                        "objectIds",
+                        "direction",
+                        "startPosition",
+                        "endPosition"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "createForm",
+                "description": "Create a form with multiple input fields",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "x": {
+                            "type": "number",
+                            "description": "Form starting X position"
+                        },
+                        "y": {
+                            "type": "number",
+                            "description": "Form starting Y position"
+                        },
+                        "fields": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "text",
+                                            "password",
+                                            "email",
+                                            "submit"
+                                        ],
+                                        "description": "Type of form field"
+                                    },
+                                    "label": {
+                                        "type": "string",
+                                        "description": "Field label text"
+                                    },
+                                    "placeholder": {
+                                        "type": "string",
+                                        "description": "Placeholder text for the field"
+                                    }
+                                },
+                                "required": [
+                                    "type",
+                                    "label"
+                                ]
+                            },
+                            "description": "Array of form fields to create"
+                        },
+                        "width": {
+                            "type": "number",
+                            "description": "Form width in pixels",
+                            "default": 300
+                        },
+                        "spacing": {
+                            "type": "number",
+                            "description": "Vertical spacing between fields",
+                            "default": 40
+                        }
+                    },
+                    "required": [
+                        "x",
+                        "y",
+                        "fields"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "createNavigation",
+                "description": "Create a navigation bar with menu items",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "x": {
+                            "type": "number",
+                            "description": "Navigation bar X position"
+                        },
+                        "y": {
+                            "type": "number",
+                            "description": "Navigation bar Y position"
+                        },
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Array of navigation menu item labels"
+                        },
+                        "width": {
+                            "type": "number",
+                            "description": "Total navigation bar width",
+                            "default": 600
+                        },
+                        "style": {
+                            "type": "string",
+                            "enum": [
+                                "horizontal",
+                                "vertical"
+                            ],
+                            "description": "Navigation layout style",
+                            "default": "horizontal"
+                        },
+                        "backgroundColor": {
+                            "type": "string",
+                            "description": "Background color of the navigation bar",
+                            "default": "#f0f0f0"
+                        }
+                    },
+                    "required": [
+                        "x",
+                        "y",
+                        "items"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "createCard",
+                "description": "Create a card layout with title, content, and optional image area",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "x": {
+                            "type": "number",
+                            "description": "Card X position"
+                        },
+                        "y": {
+                            "type": "number",
+                            "description": "Card Y position"
+                        },
+                        "width": {
+                            "type": "number",
+                            "description": "Card width in pixels",
+                            "default": 250
+                        },
+                        "height": {
+                            "type": "number",
+                            "description": "Card height in pixels",
+                            "default": 300
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "Card title text"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Card content/description text"
+                        },
+                        "hasImageArea": {
+                            "type": "boolean",
+                            "description": "Include an image placeholder area",
+                            "default": false
+                        },
+                        "backgroundColor": {
+                            "type": "string",
+                            "description": "Card background color",
+                            "default": "#ffffff"
+                        },
+                        "borderColor": {
+                            "type": "string",
+                            "description": "Card border color",
+                            "default": "#cccccc"
+                        }
+                    },
+                    "required": [
+                        "x",
+                        "y",
+                        "title",
+                        "content"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "createShapePattern",
+                "description": "Create patterns of shapes like grids of squares or rows of circles",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "shapeType": {
+                            "type": "string",
+                            "enum": [
+                                "rectangle",
+                                "circle"
+                            ],
+                            "description": "Type of shape to create in the pattern"
+                        },
+                        "startX": {
+                            "type": "number",
+                            "description": "Pattern starting X position"
+                        },
+                        "startY": {
+                            "type": "number",
+                            "description": "Pattern starting Y position"
+                        },
+                        "rows": {
+                            "type": "number",
+                            "description": "Number of rows in the pattern"
+                        },
+                        "columns": {
+                            "type": "number",
+                            "description": "Number of columns in the pattern"
+                        },
+                        "shapeSize": {
+                            "type": "number",
+                            "description": "Size of each shape (width/height for rectangles, radius for circles)"
+                        },
+                        "spacing": {
+                            "type": "number",
+                            "description": "Space between shapes in pixels"
+                        },
+                        "color": {
+                            "type": "string",
+                            "description": "Color for all shapes in the pattern"
+                        }
+                    },
+                    "required": [
+                        "shapeType",
+                        "startX",
+                        "startY",
+                        "rows",
+                        "columns",
+                        "shapeSize",
+                        "color"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "clearCanvas",
+                "description": "Clear all objects from the canvas",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "groupObjects",
+                "description": "Group objects together for batch operations",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "objectIds": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Array of object IDs to group together"
+                        },
+                        "groupName": {
+                            "type": "string",
+                            "description": "Optional name for the group"
+                        }
+                    },
+                    "required": [
+                        "objectIds"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "copyObjects",
+                "description": "Copy objects to new positions",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "objectIds": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Array of object IDs to copy"
+                        },
+                        "offsetX": {
+                            "type": "number",
+                            "description": "X offset for the copies relative to originals"
+                        },
+                        "offsetY": {
+                            "type": "number",
+                            "description": "Y offset for the copies relative to originals"
+                        },
+                        "count": {
+                            "type": "number",
+                            "description": "Number of copies to make",
+                            "default": 1
+                        }
+                    },
+                    "required": [
+                        "objectIds",
+                        "offsetX",
+                        "offsetY"
+                    ]
+                }
+            }
+        }
+    ]
+}
