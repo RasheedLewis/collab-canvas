@@ -2883,3 +2883,149 @@ I can see the unused variables causing the TypeScript errors. Let me fix them:
 
 ---
 
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/rasheedlewis/Workspace/gauntlet/collab-canvas/frontend/src/components/Auth/EmailAuth.tsx</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 2
+
+```diff
+@@ -16,6 +16,5 @@
+    disabled = false,
+    mode = 'signin',
+-   onToggleMode,
+-   className = '' 
++   onToggleMode
+  }: EmailAuthProps) {
+    const { signInWithEmail, signUpWithEmail } = useAuth();
+```
+
+</details>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/rasheedlewis/Workspace/gauntlet/collab-canvas/frontend/src/components/Auth/GoogleAuth.tsx</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 2
+
+```diff
+@@ -12,6 +12,5 @@
+    onSuccess, 
+    onError, 
+-   disabled = false,
+-   className = '' 
++   disabled = false
+  }: GoogleAuthProps) {
+    const { signInWithGoogle } = useAuth();
+```
+
+</details>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/rasheedlewis/Workspace/gauntlet/collab-canvas/frontend/src/components/Canvas/CanvasText.tsx</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -18,5 +18,5 @@
+  
+  const CanvasText: React.FC<CanvasTextProps> = ({ textObject, onMove, onTextChanged }) => {
+-   const { updateObject, selectObject, selectedObjectId, editingTextId, setEditingTextId } = useCanvasStore();
++   const { selectObject, selectedObjectId, editingTextId, setEditingTextId } = useCanvasStore();
+    const textRef = useRef<Konva.Text>(null);
+    
+```
+
+</details>
+
+---
+
+<think><details><summary>Thought Process</summary>Great! I've fixed all the TypeScript errors by removing the unused variables:
+
+1. Fixed `EmailAuth.tsx` - removed unused `className` parameter
+2. Fixed `GoogleAuth.tsx` - removed unused `className` parameter  
+3. Fixed `CanvasText.tsx` - removed unused `updateObject` from the destructuring
+
+Let me now test the build locally to make sure there are no other issues before the user redeploys to Netlify.</details></think>
+
+---
+
+Now let's test the build locally to make sure we've fixed all the TypeScript errors:
+
+---
+
+Tool use: **run_terminal_cmd**
+
+```bash
+cd frontend && npm run build
+```
+
+```
+
+> collab-canvas@0.0.0 build
+> tsc -b && vite build
+
+vite v7.1.9 building for production...
+transforming...
+✓ 155 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                     0.46 kB │ gzip:   0.29 kB
+dist/assets/index-rEGgUu6S.css      1.24 kB │ gzip:   0.63 kB
+dist/assets/index-t6UCR0xh.js   1,057.20 kB │ gzip: 289.98 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 5.03s
+
+```
+
+---
+
+<think><details><summary>Thought Process</summary>Perfect! The build completed successfully with exit code 0. The TypeScript compilation passed without any errors, and Vite successfully built the production bundle.
+
+I notice there's a warning about chunk sizes being larger than 500 KB, but that's just an optimization warning and won't cause the deployment to fail. The important thing is that the TypeScript errors have been resolved.
+
+The output shows:
+- TypeScript compilation (`tsc -b`) completed without errors
+- Vite build completed successfully 
+- Built files are in the `dist/` directory
+
+This means the Netlify deployment should now work without the TypeScript errors.</details></think>
+
+---
+
+Perfect! ✅ The build completed successfully without any TypeScript errors.
+
+## **Fixed TypeScript Issues:**
+
+1. **EmailAuth.tsx**: Removed unused `className = ''` parameter 
+2. **GoogleAuth.tsx**: Removed unused `className = ''` parameter
+3. **CanvasText.tsx**: Removed unused `updateObject` from destructuring
+
+## **Build Results:**
+- ✅ TypeScript compilation passed (`tsc -b`)
+- ✅ Vite production build completed successfully 
+- ✅ Generated optimized bundles in `dist/` folder
+
+The warning about chunk sizes > 500 KB is just an optimization suggestion and won't cause deployment failures.
+
+**🚀 Ready for Netlify Deployment!**
+
+You can now redeploy to Netlify and the build should complete successfully. The TypeScript strict mode errors have been resolved while maintaining all functionality.
+
+---
+
