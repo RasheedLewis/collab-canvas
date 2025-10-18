@@ -83,6 +83,7 @@ export class WebSocketConnectionManager {
         this.messageRouter.registerHandler('object_updated', this.handleObjectUpdated.bind(this));
         this.messageRouter.registerHandler('object_moved', this.handleObjectMoved.bind(this));
         this.messageRouter.registerHandler('object_deleted', this.handleObjectDeleted.bind(this));
+        this.messageRouter.registerHandler('text_changed', this.handleTextChanged.bind(this));
         this.messageRouter.registerHandler('canvas_state_requested', this.handleCanvasStateRequested.bind(this));
 
         console.log(`✅ Registered handlers for: ${this.messageRouter.getRegisteredTypes().join(', ')}`);
@@ -628,6 +629,56 @@ export class WebSocketConnectionManager {
             payload: {
                 roomId,
                 objectId,
+                userId: clientId
+            },
+            timestamp: Date.now()
+        });
+    }
+
+    private async handleTextChanged(clientId: string, message: any, _context: any): Promise<void> {
+        const { roomId, objectId, text, fontSize, fontFamily, fontStyle } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        // Build updates object with only provided text properties
+        const textUpdates: any = {
+            text,
+            updatedAt: Date.now()
+        };
+
+        // Include optional text formatting properties if provided
+        if (fontSize !== undefined) textUpdates.fontSize = fontSize;
+        if (fontFamily !== undefined) textUpdates.fontFamily = fontFamily;
+        if (fontStyle !== undefined) textUpdates.fontStyle = fontStyle;
+
+        try {
+            // Persist the text changes to the object
+            const success = await canvasPersistence.updateObject(roomId, objectId, textUpdates);
+            if (!success) {
+                this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, `Text object ${objectId} not found`);
+                return;
+            }
+            console.log(`📝 Updated text in object ${objectId} in room ${roomId}: "${text}"`);
+        } catch (error) {
+            console.error(`❌ Failed to update text in object ${objectId}:`, error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to update text');
+            return;
+        }
+
+        // Broadcast text change to all users in the room (including sender for confirmation)
+        this.broadcastToRoom(roomId, {
+            type: 'text_changed',
+            payload: {
+                roomId,
+                objectId,
+                text,
+                fontSize,
+                fontFamily,
+                fontStyle,
                 userId: clientId
             },
             timestamp: Date.now()

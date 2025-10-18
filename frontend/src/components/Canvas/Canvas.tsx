@@ -80,6 +80,7 @@ const Canvas: React.FC<CanvasProps> = ({
     onObjectUpdated,
     onObjectMoved,
     onObjectDeleted,
+    onTextChanged,
     onCanvasStateSync,
   } = ws;
 
@@ -481,6 +482,29 @@ const Canvas: React.FC<CanvasProps> = ({
     });
   }, [isConnected, roomId, sendMessage]);
 
+  const sendTextChanged = useCallback((
+    objectId: string, 
+    text: string, 
+    fontSize?: number, 
+    fontFamily?: string, 
+    fontStyle?: string
+  ) => {
+    if (!isConnected || !roomId) return;
+    
+    sendMessage({
+      type: 'text_changed',
+      payload: {
+        roomId,
+        objectId,
+        text,
+        fontSize,
+        fontFamily,
+        fontStyle
+      },
+      timestamp: Date.now()
+    });
+  }, [isConnected, roomId, sendMessage]);
+
   // Request canvas state function
   const requestCanvasState = useCallback(() => {
     if (!isConnected || !roomId) {
@@ -530,6 +554,18 @@ const Canvas: React.FC<CanvasProps> = ({
       deleteObject(payload.objectId);
     });
 
+    const unsubscribeTextChanged = onTextChanged((payload) => {
+      // Don't update our own text changes (they're already in the store)
+      if (payload.userId === clientId) return;
+      
+      updateObject(payload.objectId, {
+        text: payload.text,
+        fontSize: payload.fontSize,
+        fontFamily: payload.fontFamily,
+        fontStyle: payload.fontStyle
+      });
+    });
+
     const unsubscribeCanvasStateSync = onCanvasStateSync((payload) => {
       console.log(`📥 Received canvas state: ${payload.objects.length} objects`);
       
@@ -547,9 +583,10 @@ const Canvas: React.FC<CanvasProps> = ({
       unsubscribeObjectMoved();
       unsubscribeObjectUpdated();  
       unsubscribeObjectDeleted();
+      unsubscribeTextChanged();
       unsubscribeCanvasStateSync();
     };
-  }, [onObjectCreated, onObjectMoved, onObjectUpdated, onObjectDeleted, onCanvasStateSync, clientId, addObject, updateObject, deleteObject, clearCanvas]);
+  }, [onObjectCreated, onObjectMoved, onObjectUpdated, onObjectDeleted, onTextChanged, onCanvasStateSync, clientId, addObject, updateObject, deleteObject, clearCanvas]);
 
   // Listen for room join events and request canvas state
   useEffect(() => {
@@ -606,6 +643,25 @@ const Canvas: React.FC<CanvasProps> = ({
     // Then broadcast to other users
     sendObjectMoved(objectId, x, y);
   }, [updateObject, sendObjectMoved]);
+
+  // Wrapper function for text changes with broadcasting
+  const changeTextWithSync = useCallback((
+    objectId: string, 
+    text: string, 
+    fontSize?: number, 
+    fontFamily?: string, 
+    fontStyle?: string
+  ) => {
+    // Update local store first (optimistic update)
+    const updates: any = { text };
+    if (fontSize !== undefined) updates.fontSize = fontSize;
+    if (fontFamily !== undefined) updates.fontFamily = fontFamily;
+    if (fontStyle !== undefined) updates.fontStyle = fontStyle;
+    
+    updateObject(objectId, updates);
+    // Then broadcast to other users
+    sendTextChanged(objectId, text, fontSize, fontFamily, fontStyle);
+  }, [updateObject, sendTextChanged]);
 
   // Force re-render when cursors are animating
   useEffect(() => {
@@ -887,6 +943,7 @@ const Canvas: React.FC<CanvasProps> = ({
                   key={obj.id} 
                   textObject={obj as TextObject}
                   onMove={moveObjectWithSync}
+                  onTextChanged={changeTextWithSync}
                 />
               );
             }

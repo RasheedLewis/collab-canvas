@@ -265,6 +265,7 @@ export interface WebSocketHookReturn {
     onObjectUpdated: (callback: ObjectUpdatedCallback) => () => void;
     onObjectMoved: (callback: ObjectMovedCallback) => () => void;
     onObjectDeleted: (callback: ObjectDeletedCallback) => () => void;
+    onTextChanged: (callback: TextChangedCallback) => () => void;
     onCanvasStateSync: (callback: CanvasStateSyncCallback) => () => void;
 
     // Connection info
@@ -335,6 +336,19 @@ export interface ObjectDeletedMessage extends WebSocketMessage {
     };
 }
 
+export interface TextChangedMessage extends WebSocketMessage {
+    type: 'text_changed';
+    payload: {
+        roomId: string;
+        objectId: string;
+        text: string;
+        fontSize?: number;
+        fontFamily?: string;
+        fontStyle?: string;
+        userId: string;
+    };
+}
+
 export interface CanvasStateSyncMessage extends WebSocketMessage {
     type: 'canvas_state_sync';
     payload: {
@@ -374,6 +388,7 @@ export type ObjectSyncMessage =
     | ObjectUpdatedMessage
     | ObjectMovedMessage
     | ObjectDeletedMessage
+    | TextChangedMessage
     | CanvasStateSyncMessage
     | CanvasStateRequestedMessage;
 
@@ -382,6 +397,7 @@ export type ObjectCreatedCallback = (payload: ObjectCreatedMessage['payload']) =
 export type ObjectUpdatedCallback = (payload: ObjectUpdatedMessage['payload']) => void;
 export type ObjectMovedCallback = (payload: ObjectMovedMessage['payload']) => void;
 export type ObjectDeletedCallback = (payload: ObjectDeletedMessage['payload']) => void;
+export type TextChangedCallback = (payload: TextChangedMessage['payload']) => void;
 export type CanvasStateSyncCallback = (payload: CanvasStateSyncMessage['payload']) => void;
 export type ConnectionStateCallback = (state: WebSocketConnectionState) => void;
 export type UserJoinedCallback = (payload: UserJoinedPayload) => void;

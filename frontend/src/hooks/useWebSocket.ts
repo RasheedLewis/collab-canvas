@@ -27,6 +27,7 @@ import type {
     ObjectUpdatedCallback,
     ObjectMovedCallback,
     ObjectDeletedCallback,
+    TextChangedCallback,
     CanvasStateSyncCallback
 } from '../types/websocket';
 
@@ -75,6 +76,7 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
     const objectUpdatedListenersRef = useRef<Set<ObjectUpdatedCallback>>(new Set());
     const objectMovedListenersRef = useRef<Set<ObjectMovedCallback>>(new Set());
     const objectDeletedListenersRef = useRef<Set<ObjectDeletedCallback>>(new Set());
+    const textChangedListenersRef = useRef<Set<TextChangedCallback>>(new Set());
     const canvasStateSyncListenersRef = useRef<Set<CanvasStateSyncCallback>>(new Set());
 
     // Utility function to emit to all listeners
@@ -242,6 +244,11 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
 
                 case 'object_deleted': {
                     emitToListeners(objectDeletedListenersRef.current, message.payload);
+                    break;
+                }
+
+                case 'text_changed': {
+                    emitToListeners(textChangedListenersRef.current, message.payload);
                     break;
                 }
 
@@ -536,6 +543,11 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         return () => objectDeletedListenersRef.current.delete(callback);
     }, []);
 
+    const onTextChanged = useCallback((callback: TextChangedCallback) => {
+        textChangedListenersRef.current.add(callback);
+        return () => textChangedListenersRef.current.delete(callback);
+    }, []);
+
     const onCanvasStateSync = useCallback((callback: CanvasStateSyncCallback) => {
         canvasStateSyncListenersRef.current.add(callback);
         return () => canvasStateSyncListenersRef.current.delete(callback);
@@ -590,6 +602,7 @@ export function useWebSocket(config: WebSocketConfig): WebSocketHookReturn {
         onObjectUpdated,
         onObjectMoved,
         onObjectDeleted,
+        onTextChanged,
         onCanvasStateSync,
 
         // Connection info

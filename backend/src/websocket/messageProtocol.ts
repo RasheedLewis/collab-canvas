@@ -91,6 +91,7 @@ export const SUPPORTED_MESSAGE_TYPES = [
     'object_updated',
     'object_moved',
     'object_deleted',
+    'text_changed',
     'canvas_state_requested',
     'canvas_state_sync'
 ] as const;
@@ -208,6 +209,18 @@ export const ClientMessageSchemas = {
         payload: z.object({
             roomId: z.string(),
             objectId: z.string().min(1, 'Object ID is required'),
+        }),
+    }),
+
+    text_changed: BaseMessageSchema.extend({
+        type: z.literal('text_changed'),
+        payload: z.object({
+            roomId: z.string(),
+            objectId: z.string().min(1, 'Object ID is required'),
+            text: z.string(),
+            fontSize: z.number().positive('Font size must be positive').optional(),
+            fontFamily: z.string().optional(),
+            fontStyle: z.string().optional(),
         }),
     }),
 
@@ -390,6 +403,19 @@ export const ServerMessageSchemas = {
             roomId: z.string(),
             objectId: z.string(),
             userId: z.string(), // User who deleted the object
+        }),
+    }),
+
+    text_changed: BaseMessageSchema.extend({
+        type: z.literal('text_changed'),
+        payload: z.object({
+            roomId: z.string(),
+            objectId: z.string(),
+            text: z.string(),
+            fontSize: z.number().positive().optional(),
+            fontFamily: z.string().optional(),
+            fontStyle: z.string().optional(),
+            userId: z.string(), // User who changed the text
         }),
     }),
 

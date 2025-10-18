@@ -7,9 +7,16 @@ import { useCanvasStore } from '../../store/canvasStore';
 interface CanvasTextProps {
   textObject: TextObject;
   onMove: (objectId: string, x: number, y: number) => void;
+  onTextChanged: (
+    objectId: string, 
+    text: string, 
+    fontSize?: number, 
+    fontFamily?: string, 
+    fontStyle?: string
+  ) => void;
 }
 
-const CanvasText: React.FC<CanvasTextProps> = ({ textObject, onMove }) => {
+const CanvasText: React.FC<CanvasTextProps> = ({ textObject, onMove, onTextChanged }) => {
   const { updateObject, selectObject, selectedObjectId, editingTextId, setEditingTextId } = useCanvasStore();
   const textRef = useRef<Konva.Text>(null);
   
@@ -102,16 +109,29 @@ const CanvasText: React.FC<CanvasTextProps> = ({ textObject, onMove }) => {
     textarea.focus({ preventScroll: true });
     textarea.select();
 
+    let isFinished = false; // Prevent double cleanup
+    
     const finishEdit = () => {
+      if (isFinished) return; // Already finished editing
+      isFinished = true;
+      
       const newText = textarea.value || 'Text';
       
-      // Update the text object
-      updateObject(textObject.id, { text: newText });
+      // Send text change event (includes optimistic update and WebSocket broadcast)
+      onTextChanged(
+        textObject.id, 
+        newText, 
+        textObject.fontSize, 
+        textObject.fontFamily, 
+        textObject.fontStyle
+      );
       
       // Clean up
       setEditingTextId(null);
       textNode.show();
-      if (textEditContainer.parentNode) {
+      
+      // Safe DOM cleanup - check if container still exists and has parent
+      if (textEditContainer && textEditContainer.parentNode === document.body) {
         document.body.removeChild(textEditContainer);
       }
     };
@@ -123,9 +143,14 @@ const CanvasText: React.FC<CanvasTextProps> = ({ textObject, onMove }) => {
         finishEdit();
       } else if (e.key === 'Escape') {
         e.preventDefault();
+        if (isFinished) return; // Already finished editing
+        isFinished = true;
+        
         setEditingTextId(null);
         textNode.show();
-        if (textEditContainer.parentNode) {
+        
+        // Safe DOM cleanup - check if container still exists and has parent
+        if (textEditContainer && textEditContainer.parentNode === document.body) {
           document.body.removeChild(textEditContainer);
         }
       }
