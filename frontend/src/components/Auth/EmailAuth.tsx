@@ -15,8 +15,7 @@ export default function EmailAuth({
   onError, 
   disabled = false,
   mode = 'signin',
-  onToggleMode,
-  className = '' 
+  onToggleMode
 }: EmailAuthProps) {
   const { signInWithEmail, signUpWithEmail } = useAuth();
   const [isLoading, setIsLoading] = useState(false);

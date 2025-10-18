@@ -17,7 +17,7 @@ interface CanvasTextProps {
 }
 
 const CanvasText: React.FC<CanvasTextProps> = ({ textObject, onMove, onTextChanged }) => {
-  const { updateObject, selectObject, selectedObjectId, editingTextId, setEditingTextId } = useCanvasStore();
+  const { selectObject, selectedObjectId, editingTextId, setEditingTextId } = useCanvasStore();
   const textRef = useRef<Konva.Text>(null);
   
   const isSelected = selectedObjectId === textObject.id;

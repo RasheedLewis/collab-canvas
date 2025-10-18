@@ -11,8 +11,7 @@ interface GoogleAuthProps {
 export default function GoogleAuth({ 
   onSuccess, 
   onError, 
-  disabled = false,
-  className = '' 
+  disabled = false
 }: GoogleAuthProps) {
   const { signInWithGoogle } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
