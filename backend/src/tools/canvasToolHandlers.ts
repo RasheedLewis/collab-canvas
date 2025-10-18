@@ -998,46 +998,605 @@ export async function getCanvasBounds(context: ToolContext): Promise<any> {
  */
 
 export async function arrangeObjectsInRow(context: ToolContext): Promise<any> {
-    const { objectIds, startX, startY, spacing = 50, roomId, userId } = context;
+    const { objectIds, startX, y, spacing = 20, alignment = 'center', roomId, userId } = context;
 
+    // Input validation
     if (!Array.isArray(objectIds) || objectIds.length === 0) {
         throw new Error('At least one object ID is required');
     }
-
-    const canvasState = await persistenceService.getCanvasState(roomId);
-    if (!canvasState) {
-        throw new Error(`Room "${roomId}" not found`);
+    if (typeof startX !== 'number' || typeof y !== 'number') {
+        throw new Error('startX and y must be numbers');
+    }
+    if (typeof spacing !== 'number' || spacing < 0) {
+        throw new Error('Spacing must be a non-negative number');
+    }
+    if (!['top', 'center', 'bottom'].includes(alignment)) {
+        throw new Error('Alignment must be "top", "center", or "bottom"');
+    }
+    if (!roomId || typeof roomId !== 'string') {
+        throw new Error('Room ID must be a valid string');
     }
 
-    const updatedObjects = [];
-    let currentX = Number(startX);
+    const canvasState = await persistenceService.getCanvasState(roomId) || {
+        roomId, objects: [], lastUpdated: Date.now(), version: 1
+    };
 
-    for (let i = 0; i < objectIds.length; i++) {
-        const objectId = objectIds[i];
-        const objectIndex = canvasState.objects.findIndex((obj: any) => obj.id === objectId);
+    // Find all objects and validate they exist
+    const objectsToArrange = [];
+    const missingObjects = [];
 
-        if (objectIndex !== -1) {
-            const updatedObject = {
-                ...canvasState.objects[objectIndex],
-                x: currentX,
-                y: Number(startY),
-                updatedBy: userId,
-                updatedAt: Date.now()
-            };
-
-            await persistenceService.updateObject(roomId, objectId, { x: currentX, y: Number(startY) });
-            broadcastObjectUpdate(roomId, userId, 'object_updated', updatedObject);
-
-            updatedObjects.push(updatedObject);
-            currentX += Number(spacing);
+    for (const objectId of objectIds) {
+        const obj = canvasState.objects.find((obj: any) => obj.id === objectId);
+        if (obj) {
+            objectsToArrange.push(obj);
+        } else {
+            missingObjects.push(objectId);
         }
+    }
+
+    if (objectsToArrange.length === 0) {
+        throw new Error(`No valid objects found. Missing objects: ${missingObjects.join(', ')}`);
+    }
+
+    // Calculate object dimensions for proper positioning
+    const objectsWithDimensions = objectsToArrange.map((obj: any) => {
+        let width = 0, height = 0;
+
+        if (obj.type === 'rectangle') {
+            width = obj.width;
+            height = obj.height;
+        } else if (obj.type === 'circle') {
+            width = height = obj.radius * 2;
+        } else if (obj.type === 'text') {
+            // Estimate text dimensions
+            width = (obj.text?.length || 0) * (obj.fontSize * 0.6);
+            height = obj.fontSize * 1.2;
+        }
+
+        return { ...obj, width, height };
+    });
+
+    // Calculate Y positions based on alignment
+    const maxHeight = Math.max(...objectsWithDimensions.map(obj => obj.height));
+
+    const updatedObjects = [];
+    let currentX = startX;
+
+    for (let i = 0; i < objectsWithDimensions.length; i++) {
+        const obj = objectsWithDimensions[i];
+
+        // Calculate Y position based on alignment
+        let alignedY = y;
+        if (alignment === 'top') {
+            alignedY = y;
+        } else if (alignment === 'center') {
+            alignedY = y - obj.height / 2 + maxHeight / 2;
+        } else if (alignment === 'bottom') {
+            alignedY = y - obj.height + maxHeight;
+        }
+
+        // Update object position
+        const updatedObject = {
+            ...obj,
+            x: currentX,
+            y: alignedY,
+            updatedBy: userId,
+            updatedAt: Date.now()
+        };
+
+        // Persist the change
+        await persistenceService.createOrUpdateObject(roomId, updatedObject);
+
+        // Broadcast the update
+        if (wsManager) {
+            wsManager.broadcastToRoom(roomId, {
+                type: 'object_moved',
+                payload: {
+                    objectId: obj.id,
+                    x: currentX,
+                    y: alignedY,
+                    previousX: obj.x,
+                    previousY: obj.y,
+                    userId
+                }
+            });
+        }
+
+        updatedObjects.push({
+            id: obj.id,
+            type: obj.type,
+            position: { x: currentX, y: alignedY },
+            previousPosition: { x: obj.x, y: obj.y }
+        });
+
+        // Move to next position (current object width + spacing)
+        currentX += obj.width + spacing;
     }
 
     return {
         success: true,
-        arrangedCount: updatedObjects.length,
-        objects: updatedObjects,
-        message: `Arranged ${updatedObjects.length} objects in a row`
+        result: {
+            arrangedCount: updatedObjects.length,
+            objects: updatedObjects,
+            configuration: {
+                startX,
+                y,
+                spacing,
+                alignment,
+                totalWidth: currentX - startX - spacing,
+                maxHeight
+            },
+            ...(missingObjects.length > 0 && {
+                warnings: [`${missingObjects.length} objects not found: ${missingObjects.join(', ')}`]
+            })
+        },
+        message: `Arranged ${updatedObjects.length} objects in a row with ${alignment} alignment (${missingObjects.length > 0 ? `${missingObjects.length} objects not found` : 'all objects arranged'})`
+    };
+}
+
+export async function arrangeObjectsInGrid(context: ToolContext): Promise<any> {
+    const { objectIds, startX, startY, columns, spacingX = 20, spacingY = 20, roomId, userId } = context;
+
+    // Input validation
+    if (!Array.isArray(objectIds) || objectIds.length === 0) {
+        throw new Error('At least one object ID is required');
+    }
+    if (typeof startX !== 'number' || typeof startY !== 'number') {
+        throw new Error('startX and startY must be numbers');
+    }
+    if (typeof columns !== 'number' || columns < 1) {
+        throw new Error('Columns must be a positive number');
+    }
+    if (typeof spacingX !== 'number' || spacingX < 0) {
+        throw new Error('spacingX must be a non-negative number');
+    }
+    if (typeof spacingY !== 'number' || spacingY < 0) {
+        throw new Error('spacingY must be a non-negative number');
+    }
+    if (!roomId || typeof roomId !== 'string') {
+        throw new Error('Room ID must be a valid string');
+    }
+
+    const canvasState = await persistenceService.getCanvasState(roomId) || {
+        roomId, objects: [], lastUpdated: Date.now(), version: 1
+    };
+
+    // Find all objects and validate they exist
+    const objectsToArrange = [];
+    const missingObjects = [];
+
+    for (const objectId of objectIds) {
+        const obj = canvasState.objects.find((obj: any) => obj.id === objectId);
+        if (obj) {
+            objectsToArrange.push(obj);
+        } else {
+            missingObjects.push(objectId);
+        }
+    }
+
+    if (objectsToArrange.length === 0) {
+        throw new Error(`No valid objects found. Missing objects: ${missingObjects.join(', ')}`);
+    }
+
+    // Calculate object dimensions for proper positioning
+    const objectsWithDimensions = objectsToArrange.map((obj: any) => {
+        let width = 0, height = 0;
+
+        if (obj.type === 'rectangle') {
+            width = obj.width;
+            height = obj.height;
+        } else if (obj.type === 'circle') {
+            width = height = obj.radius * 2;
+        } else if (obj.type === 'text') {
+            width = (obj.text?.length || 0) * (obj.fontSize * 0.6);
+            height = obj.fontSize * 1.2;
+        }
+
+        return { ...obj, width, height };
+    });
+
+    // Calculate grid layout
+    const rows = Math.ceil(objectsToArrange.length / columns);
+    const updatedObjects = [];
+
+    for (let i = 0; i < objectsWithDimensions.length; i++) {
+        const obj = objectsWithDimensions[i];
+        const row = Math.floor(i / columns);
+        const col = i % columns;
+
+        // Calculate position in grid
+        const x = startX + col * (Math.max(...objectsWithDimensions.map(o => o.width)) + spacingX);
+        const y = startY + row * (Math.max(...objectsWithDimensions.map(o => o.height)) + spacingY);
+
+        // Update object position
+        const updatedObject = {
+            ...obj,
+            x,
+            y,
+            updatedBy: userId,
+            updatedAt: Date.now()
+        };
+
+        // Persist the change
+        await persistenceService.createOrUpdateObject(roomId, updatedObject);
+
+        // Broadcast the update
+        if (wsManager) {
+            wsManager.broadcastToRoom(roomId, {
+                type: 'object_moved',
+                payload: {
+                    objectId: obj.id,
+                    x,
+                    y,
+                    previousX: obj.x,
+                    previousY: obj.y,
+                    userId
+                }
+            });
+        }
+
+        updatedObjects.push({
+            id: obj.id,
+            type: obj.type,
+            position: { x, y },
+            previousPosition: { x: obj.x, y: obj.y },
+            gridPosition: { row, column: col }
+        });
+    }
+
+    const maxObjectWidth = Math.max(...objectsWithDimensions.map(o => o.width));
+    const maxObjectHeight = Math.max(...objectsWithDimensions.map(o => o.height));
+
+    return {
+        success: true,
+        result: {
+            arrangedCount: updatedObjects.length,
+            objects: updatedObjects,
+            gridConfiguration: {
+                startX,
+                startY,
+                columns,
+                rows,
+                spacingX,
+                spacingY,
+                totalWidth: columns * maxObjectWidth + (columns - 1) * spacingX,
+                totalHeight: rows * maxObjectHeight + (rows - 1) * spacingY,
+                cellSize: { width: maxObjectWidth, height: maxObjectHeight }
+            },
+            ...(missingObjects.length > 0 && {
+                warnings: [`${missingObjects.length} objects not found: ${missingObjects.join(', ')}`]
+            })
+        },
+        message: `Arranged ${updatedObjects.length} objects in a ${columns}×${rows} grid (${missingObjects.length > 0 ? `${missingObjects.length} objects not found` : 'all objects arranged'})`
+    };
+}
+
+export async function alignObjects(context: ToolContext): Promise<any> {
+    const { objectIds, alignment, referencePoint, roomId, userId } = context;
+
+    // Input validation
+    if (!Array.isArray(objectIds) || objectIds.length === 0) {
+        throw new Error('At least one object ID is required');
+    }
+    if (!['left', 'center', 'right', 'top', 'middle', 'bottom'].includes(alignment)) {
+        throw new Error('Alignment must be one of: left, center, right, top, middle, bottom');
+    }
+    if (referencePoint !== undefined && typeof referencePoint !== 'number') {
+        throw new Error('Reference point must be a number if provided');
+    }
+    if (!roomId || typeof roomId !== 'string') {
+        throw new Error('Room ID must be a valid string');
+    }
+
+    const canvasState = await persistenceService.getCanvasState(roomId) || {
+        roomId, objects: [], lastUpdated: Date.now(), version: 1
+    };
+
+    // Find all objects and validate they exist
+    const objectsToAlign = [];
+    const missingObjects = [];
+
+    for (const objectId of objectIds) {
+        const obj = canvasState.objects.find((obj: any) => obj.id === objectId);
+        if (obj) {
+            objectsToAlign.push(obj);
+        } else {
+            missingObjects.push(objectId);
+        }
+    }
+
+    if (objectsToAlign.length === 0) {
+        throw new Error(`No valid objects found. Missing objects: ${missingObjects.join(', ')}`);
+    }
+
+    // Calculate object dimensions and bounds
+    const objectsWithDimensions = objectsToAlign.map((obj: any) => {
+        let width = 0, height = 0, centerX = obj.x, centerY = obj.y;
+
+        if (obj.type === 'rectangle') {
+            width = obj.width;
+            height = obj.height;
+            centerX = obj.x + width / 2;
+            centerY = obj.y + height / 2;
+        } else if (obj.type === 'circle') {
+            width = height = obj.radius * 2;
+            centerX = obj.x + obj.radius;
+            centerY = obj.y + obj.radius;
+        } else if (obj.type === 'text') {
+            width = (obj.text?.length || 0) * (obj.fontSize * 0.6);
+            height = obj.fontSize * 1.2;
+            centerX = obj.x + width / 2;
+            centerY = obj.y + height / 2;
+        }
+
+        return {
+            ...obj,
+            width,
+            height,
+            centerX,
+            centerY,
+            right: obj.x + width,
+            bottom: obj.y + height
+        };
+    });
+
+    // Calculate alignment coordinate
+    let alignmentCoordinate: number;
+
+    if (referencePoint !== undefined) {
+        alignmentCoordinate = referencePoint;
+    } else {
+        // Auto-calculate based on existing objects
+        switch (alignment) {
+            case 'left':
+                alignmentCoordinate = Math.min(...objectsWithDimensions.map(obj => obj.x));
+                break;
+            case 'center':
+                alignmentCoordinate = objectsWithDimensions.reduce((sum, obj) => sum + obj.centerX, 0) / objectsWithDimensions.length;
+                break;
+            case 'right':
+                alignmentCoordinate = Math.max(...objectsWithDimensions.map(obj => obj.right));
+                break;
+            case 'top':
+                alignmentCoordinate = Math.min(...objectsWithDimensions.map(obj => obj.y));
+                break;
+            case 'middle':
+                alignmentCoordinate = objectsWithDimensions.reduce((sum, obj) => sum + obj.centerY, 0) / objectsWithDimensions.length;
+                break;
+            case 'bottom':
+                alignmentCoordinate = Math.max(...objectsWithDimensions.map(obj => obj.bottom));
+                break;
+            default:
+                throw new Error('Invalid alignment type');
+        }
+    }
+
+    const updatedObjects = [];
+
+    for (const obj of objectsWithDimensions) {
+        let newX = obj.x;
+        let newY = obj.y;
+
+        // Calculate new position based on alignment
+        switch (alignment) {
+            case 'left':
+                newX = alignmentCoordinate;
+                break;
+            case 'center':
+                newX = alignmentCoordinate - obj.width / 2;
+                break;
+            case 'right':
+                newX = alignmentCoordinate - obj.width;
+                break;
+            case 'top':
+                newY = alignmentCoordinate;
+                break;
+            case 'middle':
+                newY = alignmentCoordinate - obj.height / 2;
+                break;
+            case 'bottom':
+                newY = alignmentCoordinate - obj.height;
+                break;
+        }
+
+        // Update object position
+        const updatedObject = {
+            ...obj,
+            x: newX,
+            y: newY,
+            updatedBy: userId,
+            updatedAt: Date.now()
+        };
+
+        // Persist the change
+        await persistenceService.createOrUpdateObject(roomId, updatedObject);
+
+        // Broadcast the update
+        if (wsManager) {
+            wsManager.broadcastToRoom(roomId, {
+                type: 'object_moved',
+                payload: {
+                    objectId: obj.id,
+                    x: newX,
+                    y: newY,
+                    previousX: obj.x,
+                    previousY: obj.y,
+                    userId
+                }
+            });
+        }
+
+        updatedObjects.push({
+            id: obj.id,
+            type: obj.type,
+            position: { x: newX, y: newY },
+            previousPosition: { x: obj.x, y: obj.y },
+            alignmentShift: {
+                x: newX - obj.x,
+                y: newY - obj.y
+            }
+        });
+    }
+
+    return {
+        success: true,
+        result: {
+            alignedCount: updatedObjects.length,
+            objects: updatedObjects,
+            alignmentConfiguration: {
+                alignment,
+                alignmentCoordinate: Math.round(alignmentCoordinate * 100) / 100,
+                axis: ['left', 'center', 'right'].includes(alignment) ? 'horizontal' : 'vertical'
+            },
+            ...(missingObjects.length > 0 && {
+                warnings: [`${missingObjects.length} objects not found: ${missingObjects.join(', ')}`]
+            })
+        },
+        message: `Aligned ${updatedObjects.length} objects to ${alignment} at coordinate ${Math.round(alignmentCoordinate * 100) / 100} (${missingObjects.length > 0 ? `${missingObjects.length} objects not found` : 'all objects aligned'})`
+    };
+}
+
+export async function distributeObjects(context: ToolContext): Promise<any> {
+    const { objectIds, direction, startPosition, endPosition, roomId, userId } = context;
+
+    // Input validation
+    if (!Array.isArray(objectIds) || objectIds.length < 2) {
+        throw new Error('At least two object IDs are required for distribution');
+    }
+    if (!['horizontal', 'vertical'].includes(direction)) {
+        throw new Error('Direction must be "horizontal" or "vertical"');
+    }
+    if (typeof startPosition !== 'number' || typeof endPosition !== 'number') {
+        throw new Error('Start and end positions must be numbers');
+    }
+    if (startPosition >= endPosition) {
+        throw new Error('End position must be greater than start position');
+    }
+    if (!roomId || typeof roomId !== 'string') {
+        throw new Error('Room ID must be a valid string');
+    }
+
+    const canvasState = await persistenceService.getCanvasState(roomId) || {
+        roomId, objects: [], lastUpdated: Date.now(), version: 1
+    };
+
+    // Find all objects and validate they exist
+    const objectsToDistribute = [];
+    const missingObjects = [];
+
+    for (const objectId of objectIds) {
+        const obj = canvasState.objects.find((obj: any) => obj.id === objectId);
+        if (obj) {
+            objectsToDistribute.push(obj);
+        } else {
+            missingObjects.push(objectId);
+        }
+    }
+
+    if (objectsToDistribute.length < 2) {
+        throw new Error(`At least 2 valid objects required for distribution. Found: ${objectsToDistribute.length}, Missing: ${missingObjects.join(', ')}`);
+    }
+
+    // Calculate object dimensions
+    const objectsWithDimensions = objectsToDistribute.map((obj: any) => {
+        let width = 0, height = 0;
+
+        if (obj.type === 'rectangle') {
+            width = obj.width;
+            height = obj.height;
+        } else if (obj.type === 'circle') {
+            width = height = obj.radius * 2;
+        } else if (obj.type === 'text') {
+            width = (obj.text?.length || 0) * (obj.fontSize * 0.6);
+            height = obj.fontSize * 1.2;
+        }
+
+        return { ...obj, width, height };
+    });
+
+    // Sort objects by their current position along the distribution axis
+    const isHorizontal = direction === 'horizontal';
+    objectsWithDimensions.sort((a, b) => {
+        const aPos = isHorizontal ? a.x : a.y;
+        const bPos = isHorizontal ? b.x : b.y;
+        return aPos - bPos;
+    });
+
+    // Calculate the total space available and divide it evenly
+    const totalDistance = endPosition - startPosition;
+    const spacing = totalDistance / (objectsWithDimensions.length - 1);
+
+    const updatedObjects = [];
+
+    for (let i = 0; i < objectsWithDimensions.length; i++) {
+        const obj = objectsWithDimensions[i];
+        let newX = obj.x;
+        let newY = obj.y;
+
+        // Calculate new position based on even distribution
+        const distributedPosition = startPosition + (i * spacing);
+
+        if (isHorizontal) {
+            newX = distributedPosition;
+        } else {
+            newY = distributedPosition;
+        }
+
+        // Update object position
+        const updatedObject = {
+            ...obj,
+            x: newX,
+            y: newY,
+            updatedBy: userId,
+            updatedAt: Date.now()
+        };
+
+        // Persist the change
+        await persistenceService.createOrUpdateObject(roomId, updatedObject);
+
+        // Broadcast the update
+        if (wsManager) {
+            wsManager.broadcastToRoom(roomId, {
+                type: 'object_moved',
+                payload: {
+                    objectId: obj.id,
+                    x: newX,
+                    y: newY,
+                    previousX: obj.x,
+                    previousY: obj.y,
+                    userId
+                }
+            });
+        }
+
+        updatedObjects.push({
+            id: obj.id,
+            type: obj.type,
+            position: { x: newX, y: newY },
+            previousPosition: { x: obj.x, y: obj.y },
+            distributionIndex: i,
+            distributedCoordinate: distributedPosition
+        });
+    }
+
+    return {
+        success: true,
+        result: {
+            distributedCount: updatedObjects.length,
+            objects: updatedObjects,
+            distributionConfiguration: {
+                direction,
+                startPosition,
+                endPosition,
+                totalDistance,
+                spacing: Math.round(spacing * 100) / 100,
+                axis: isHorizontal ? 'x' : 'y'
+            },
+            ...(missingObjects.length > 0 && {
+                warnings: [`${missingObjects.length} objects not found: ${missingObjects.join(', ')}`]
+            })
+        },
+        message: `Distributed ${updatedObjects.length} objects ${direction}ly from ${startPosition} to ${endPosition} with ${Math.round(spacing * 100) / 100}px spacing (${missingObjects.length > 0 ? `${missingObjects.length} objects not found` : 'all objects distributed'})`
     };
 }
 
@@ -1074,5 +1633,8 @@ export const CANVAS_TOOL_HANDLERS = {
     findObjects,
     getCanvasBounds,
     arrangeObjectsInRow,
+    arrangeObjectsInGrid,
+    alignObjects,
+    distributeObjects,
     clearCanvas
 };
