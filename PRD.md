@@ -162,3 +162,199 @@ We will test the MVP with the following scenarios:
     *   Fix critical bugs and performance issues.
 
 > **Warning:** Multiplayer sync is the hardest part. Build it first. Avoid the temptation to add extra features until the core collaboration is solid.
+
+---
+
+## **9. Post-MVP Feature: AI Canvas Agent**
+
+**Status:** Planned for Phase 2  
+**Priority:** High  
+**Goal:** Build an AI agent that manipulates the canvas through natural language using OpenAI function calling.
+
+### **Feature Overview**
+
+The AI Canvas Agent allows users to create, manipulate, and arrange canvas objects using natural language commands. When a user types "Create a blue rectangle in the center," the AI agent calls canvas API functions, and the rectangle appears on everyone's canvas via real-time sync.
+
+### **Required Capabilities**
+
+- **6+ Distinct Command Types:** Creation, manipulation, layout, and complex operations
+- **Real-time Sync:** All AI-generated content syncs across all users
+- **Natural Language Processing:** Handle conversational requests with context
+- **Multi-step Operations:** Execute complex commands like "create a login form"
+- **Performance Target:** <2 seconds response time for single-step commands
+
+### **Implementation Subtasks**
+
+#### **Phase 1: Core AI Infrastructure (8-12 hours)**
+
+**1.1 OpenAI Integration Setup**
+- [ ] Install and configure OpenAI SDK in backend
+- [ ] Set up environment variables for OpenAI API key
+- [ ] Create OpenAI client service with error handling
+- [ ] Implement rate limiting and cost monitoring
+- [ ] Add request/response logging for debugging
+
+**1.2 AI Tool Schema Implementation**
+- [ ] Create `ai-tools.json` schema file (✅ Complete)
+- [ ] Implement tool validation system
+- [ ] Create tool registry for dynamic loading
+- [ ] Add tool versioning support
+- [ ] Document tool usage patterns
+
+**1.3 Backend API Endpoints**
+- [ ] Create `/api/ai/chat` endpoint for AI conversations
+- [ ] Implement `/api/ai/execute-tool` endpoint for function calls
+- [ ] Add `/api/ai/canvas-context` endpoint for current state
+- [ ] Create middleware for AI request authentication
+- [ ] Add request queuing for concurrent AI operations
+
+#### **Phase 2: Canvas Tool Implementation (12-16 hours)**
+
+**2.1 Core Creation Tools**
+- [ ] Implement `createRectangle` function with WebSocket sync
+- [ ] Implement `createCircle` function with WebSocket sync  
+- [ ] Implement `createText` function with WebSocket sync
+- [ ] Add input validation for all creation parameters
+- [ ] Test creation tools with real-time synchronization
+
+**2.2 Manipulation Tools**
+- [ ] Implement `moveObject` function
+- [ ] Implement `resizeObject` function
+- [ ] Implement `rotateObject` function
+- [ ] Implement `deleteObject` function
+- [ ] Add object existence validation
+
+**2.3 Query & Context Tools**
+- [ ] Implement `getCanvasState` function
+- [ ] Implement `findObjects` search function
+- [ ] Implement `getCanvasBounds` function
+- [ ] Add canvas coordinate system helpers
+- [ ] Create object filtering utilities
+
+**2.4 Layout & Arrangement Tools**
+- [ ] Implement `arrangeObjectsInRow` function
+- [ ] Implement `arrangeObjectsInGrid` function
+- [ ] Implement `alignObjects` function
+- [ ] Implement `distributeObjects` function
+- [ ] Add collision detection for layout operations
+
+#### **Phase 3: Complex Operations (8-10 hours)**
+
+**3.1 Complex Creation Tools**
+- [ ] Implement `createForm` with multiple field types
+- [ ] Implement `createNavigation` with menu items
+- [ ] Implement `createCard` with structured layout
+- [ ] Implement `createShapePattern` for grids/patterns
+- [ ] Add template system for complex objects
+
+**3.2 Advanced Canvas Management**
+- [ ] Implement `clearCanvas` function (✅ Complete)
+- [ ] Implement `groupObjects` function
+- [ ] Implement `copyObjects` function
+- [ ] Add undo/redo support for AI operations
+- [ ] Create batch operation support
+
+#### **Phase 4: Frontend AI Interface (6-8 hours)**
+
+**4.1 AI Chat Component**
+- [ ] Create `AIChat` React component
+- [ ] Implement chat message history
+- [ ] Add typing indicators and loading states
+- [ ] Create message formatting for commands/results
+- [ ] Add voice input support (optional)
+
+**4.2 AI Toolbar Integration**
+- [ ] Add AI chat toggle button to toolbar
+- [ ] Create floating AI assistant panel
+- [ ] Implement AI suggestion prompts
+- [ ] Add quick command buttons for common operations
+- [ ] Create AI command history
+
+**4.3 Visual Feedback System**
+- [ ] Add progress indicators for AI operations
+- [ ] Implement object highlighting for AI-created items
+- [ ] Create visual confirmation for AI commands
+- [ ] Add error handling with user-friendly messages
+- [ ] Implement AI operation preview mode
+
+#### **Phase 5: Advanced AI Features (4-6 hours)**
+
+**5.1 Context Awareness**
+- [ ] Implement canvas state analysis for AI context
+- [ ] Add object relationship understanding
+- [ ] Create spatial awareness for positioning
+- [ ] Implement color palette suggestions
+- [ ] Add design pattern recognition
+
+**5.2 Multi-step Operations**
+- [ ] Create operation planning system
+- [ ] Implement step-by-step execution
+- [ ] Add operation rollback capabilities
+- [ ] Create confirmation dialogs for complex operations
+- [ ] Add progress tracking for multi-step commands
+
+**5.3 Collaborative AI Features**
+- [ ] Implement AI request queuing for multiple users
+- [ ] Add AI operation attribution (who requested what)
+- [ ] Create AI operation conflict resolution
+- [ ] Implement shared AI conversation history
+- [ ] Add AI operation permissions system
+
+#### **Phase 6: Testing & Optimization (4-6 hours)**
+
+**6.1 Comprehensive Testing**
+- [ ] Test all 21 AI tool functions individually
+- [ ] Test complex multi-step operations
+- [ ] Validate real-time sync for AI-generated content
+- [ ] Test concurrent AI operations by multiple users
+- [ ] Performance testing for response times
+
+**6.2 Error Handling & Resilience**
+- [ ] Implement comprehensive error handling
+- [ ] Add fallback mechanisms for API failures
+- [ ] Create retry logic for failed operations
+- [ ] Add user feedback for partial failures
+- [ ] Implement graceful degradation
+
+**6.3 Documentation & Examples**
+- [ ] Create AI command documentation
+- [ ] Add example prompts and expected outcomes
+- [ ] Create developer API documentation
+- [ ] Add troubleshooting guide
+- [ ] Create user tutorial/onboarding
+
+### **Acceptance Criteria**
+
+| Test Scenario | Expected Outcome |
+| :--- | :--- |
+| **"Create a blue rectangle at 100, 200"** | Rectangle appears at exact coordinates with blue fill, syncs to all users |
+| **"Create a login form"** | Form with username, password, and submit button appears, properly aligned |
+| **"Arrange these shapes in a 3x3 grid"** | Selected objects arrange in perfect 3x3 grid with equal spacing |
+| **"Move the blue rectangle to the center"** | AI identifies blue rectangle, calculates center, moves object smoothly |
+| **Complex multi-user scenario** | Multiple users can use AI simultaneously without conflicts |
+| **Performance under load** | AI responds within 2 seconds for simple commands, 5 seconds for complex |
+
+### **Success Metrics**
+
+- **Latency:** <2s for single-step commands, <5s for complex operations
+- **Breadth:** Successfully handles 6+ distinct command types
+- **Accuracy:** 95%+ success rate for well-formed natural language commands
+- **Sync Reliability:** 100% real-time sync for AI-generated content
+- **User Adoption:** Natural language interface reduces learning curve
+
+### **Technical Dependencies**
+
+- ✅ WebSocket real-time synchronization (MVP complete)
+- ✅ Canvas object manipulation system (MVP complete)
+- ✅ User authentication and permissions (MVP complete)
+- ⏳ OpenAI API integration (Phase 1)
+- ⏳ Backend API expansion (Phase 2)
+- ⏳ Frontend AI interface (Phase 4)
+
+### **Risk Mitigation**
+
+- **OpenAI API Rate Limits:** Implement request queuing and user limits
+- **Cost Management:** Add usage monitoring and budget alerts
+- **Latency Issues:** Implement caching and optimistic UI updates
+- **Complex Command Parsing:** Start with simple commands, expand gradually
+- **Multi-user Conflicts:** Leverage existing conflict resolution system
