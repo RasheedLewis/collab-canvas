@@ -1,0 +1,38 @@
+{
+  "roomId": "test-room-manipulation-tools",
+  "objects": [
+    {
+      "id": "obj_1760825237861_pzfr1qawu",
+      "type": "rectangle",
+      "x": 200,
+      "y": 150,
+      "width": 200,
+      "height": 120,
+      "color": "#FF6B6B",
+      "fill": "#FF6B6B",
+      "stroke": "#1E40AF",
+      "strokeWidth": 2,
+      "rotation": 45,
+      "createdBy": "test-user-manipulation",
+      "createdAt": 1760825237861,
+      "updatedAt": 1760825237879
+    },
+    {
+      "id": "obj_1760825237862_td4ip07ws",
+      "type": "circle",
+      "x": 300,
+      "y": 150,
+      "radius": 75,
+      "color": "#51CF66",
+      "fill": "#51CF66",
+      "stroke": "#047857",
+      "strokeWidth": 2,
+      "rotation": 90,
+      "createdBy": "test-user-manipulation",
+      "createdAt": 1760825237862,
+      "updatedAt": 1760825237879
+    }
+  ],
+  "lastUpdated": 1760825237880,
+  "version": 11
+}

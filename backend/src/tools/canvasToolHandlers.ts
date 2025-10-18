@@ -214,6 +214,23 @@ export async function createText(context: ToolContext): Promise<any> {
 export async function moveObject(context: ToolContext): Promise<any> {
     const { objectId, x, y, roomId, userId } = context;
 
+    // Input validation
+    if (!objectId || typeof objectId !== 'string') {
+        throw new Error('Object ID must be a valid string');
+    }
+    if (typeof x !== 'number' || typeof y !== 'number') {
+        throw new Error('Position coordinates (x, y) must be numbers');
+    }
+    if (isNaN(x) || isNaN(y)) {
+        throw new Error('Position coordinates must be valid numbers');
+    }
+    if (x < 0 || y < 0) {
+        throw new Error('Position coordinates must be non-negative');
+    }
+    if (x > 10000 || y > 10000) {
+        throw new Error('Position coordinates must be within canvas bounds (max 10000)');
+    }
+
     // Get current canvas state
     const canvasState = await persistenceService.getCanvasState(roomId);
     if (!canvasState) {
@@ -226,30 +243,38 @@ export async function moveObject(context: ToolContext): Promise<any> {
         throw new Error(`Object with ID "${objectId}" not found`);
     }
 
+    const currentObject = canvasState.objects[objectIndex];
     const updatedObject = {
-        ...canvasState.objects[objectIndex],
+        ...currentObject,
         x: Number(x),
         y: Number(y),
         updatedBy: userId,
-        updatedAt: new Date().toISOString()
+        updatedAt: Date.now()
     };
 
     // Update in persistence
     await persistenceService.updateObject(roomId, objectId, { x: Number(x), y: Number(y) });
 
     // Broadcast to other clients
-    broadcastObjectUpdate(roomId, userId, 'object_updated', updatedObject);
+    broadcastObjectUpdate(roomId, userId, 'object_moved', updatedObject);
 
     return {
         success: true,
         objectId,
+        objectType: currentObject.type,
+        previousPosition: { x: currentObject.x, y: currentObject.y },
         newPosition: { x: Number(x), y: Number(y) },
-        message: `Moved object to position (${x}, ${y})`
+        message: `Moved ${currentObject.type} object from (${currentObject.x}, ${currentObject.y}) to (${x}, ${y})`
     };
 }
 
 export async function resizeObject(context: ToolContext): Promise<any> {
-    const { objectId, width, height, roomId, userId } = context;
+    const { objectId, width, height, radius, fontSize, roomId, userId } = context;
+
+    // Input validation
+    if (!objectId || typeof objectId !== 'string') {
+        throw new Error('Object ID must be a valid string');
+    }
 
     // Get current canvas state
     const canvasState = await persistenceService.getCanvasState(roomId);
@@ -265,43 +290,134 @@ export async function resizeObject(context: ToolContext): Promise<any> {
 
     const currentObject = canvasState.objects[objectIndex];
     let updateData: any = {};
+    let resizeDescription = '';
 
-    // Handle different object types
-    if (currentObject.type === 'rectangle' || currentObject.type === 'text') {
-        updateData = {
-            width: Number(width),
-            height: Number(height)
-        };
+    // Handle different object types with validation
+    if (currentObject.type === 'rectangle') {
+        if (width !== undefined) {
+            if (typeof width !== 'number' || width <= 0) {
+                throw new Error('Width must be a positive number');
+            }
+            if (width > 5000) {
+                throw new Error('Width must be within reasonable bounds (max 5000)');
+            }
+            updateData.width = Number(width);
+        }
+        if (height !== undefined) {
+            if (typeof height !== 'number' || height <= 0) {
+                throw new Error('Height must be a positive number');
+            }
+            if (height > 5000) {
+                throw new Error('Height must be within reasonable bounds (max 5000)');
+            }
+            updateData.height = Number(height);
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            throw new Error('At least width or height must be specified for rectangle resize');
+        }
+
+        resizeDescription = `width: ${updateData.width || currentObject.width}, height: ${updateData.height || currentObject.height}`;
+
     } else if (currentObject.type === 'circle') {
-        // For circles, use width as diameter (radius = width/2)
-        updateData = {
-            radius: Number(width) / 2
-        };
+        if (radius !== undefined) {
+            if (typeof radius !== 'number' || radius <= 0) {
+                throw new Error('Radius must be a positive number');
+            }
+            if (radius > 2500) {
+                throw new Error('Radius must be within reasonable bounds (max 2500)');
+            }
+            updateData.radius = Number(radius);
+            resizeDescription = `radius: ${radius}`;
+        } else {
+            throw new Error('Radius must be specified for circle resize');
+        }
+
+    } else if (currentObject.type === 'text') {
+        if (fontSize !== undefined) {
+            if (typeof fontSize !== 'number' || fontSize <= 0) {
+                throw new Error('Font size must be a positive number');
+            }
+            if (fontSize > 200 || fontSize < 8) {
+                throw new Error('Font size must be between 8 and 200 pixels');
+            }
+            updateData.fontSize = Number(fontSize);
+            resizeDescription = `fontSize: ${fontSize}px`;
+        }
+
+        // Text can also have width/height for bounding box
+        if (width !== undefined) {
+            if (typeof width !== 'number' || width <= 0) {
+                throw new Error('Width must be a positive number');
+            }
+            updateData.width = Number(width);
+        }
+        if (height !== undefined) {
+            if (typeof height !== 'number' || height <= 0) {
+                throw new Error('Height must be a positive number');
+            }
+            updateData.height = Number(height);
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            throw new Error('At least fontSize, width, or height must be specified for text resize');
+        }
+
+        if (!resizeDescription) {
+            resizeDescription = `width: ${updateData.width || 'auto'}, height: ${updateData.height || 'auto'}`;
+        }
+
+    } else {
+        throw new Error(`Resize not supported for object type: ${(currentObject as any).type}`);
     }
 
     const updatedObject = {
         ...currentObject,
         ...updateData,
         updatedBy: userId,
-        updatedAt: new Date().toISOString()
+        updatedAt: Date.now()
     };
 
     // Update in persistence
     await persistenceService.updateObject(roomId, objectId, updateData);
 
     // Broadcast to other clients
-    broadcastObjectUpdate(roomId, userId, 'object_updated', updatedObject);
+    broadcastObjectUpdate(roomId, userId, 'object_resized', updatedObject);
 
     return {
         success: true,
         objectId,
+        objectType: currentObject.type,
+        previousSize: {
+            ...((currentObject as any).width && { width: (currentObject as any).width }),
+            ...((currentObject as any).height && { height: (currentObject as any).height }),
+            ...((currentObject as any).radius && { radius: (currentObject as any).radius }),
+            ...((currentObject as any).fontSize && { fontSize: (currentObject as any).fontSize })
+        },
         newSize: updateData,
-        message: `Resized ${currentObject.type} object`
+        message: `Resized ${currentObject.type} object: ${resizeDescription}`
     };
 }
 
 export async function rotateObject(context: ToolContext): Promise<any> {
     const { objectId, rotation, roomId, userId } = context;
+
+    // Input validation
+    if (!objectId || typeof objectId !== 'string') {
+        throw new Error('Object ID must be a valid string');
+    }
+    if (typeof rotation !== 'number') {
+        throw new Error('Rotation must be a number');
+    }
+    if (isNaN(rotation)) {
+        throw new Error('Rotation must be a valid number');
+    }
+
+    // Normalize rotation to 0-360 degrees
+    let normalizedRotation = rotation % 360;
+    if (normalizedRotation < 0) {
+        normalizedRotation += 360;
+    }
 
     // Get current canvas state
     const canvasState = await persistenceService.getCanvasState(roomId);
@@ -315,15 +431,18 @@ export async function rotateObject(context: ToolContext): Promise<any> {
         throw new Error(`Object with ID "${objectId}" not found`);
     }
 
+    const currentObject = canvasState.objects[objectIndex];
+    const previousRotation = currentObject.rotation || 0;
+
     const updatedObject = {
-        ...canvasState.objects[objectIndex],
-        rotation: Number(rotation),
+        ...currentObject,
+        rotation: normalizedRotation,
         updatedBy: userId,
-        updatedAt: new Date().toISOString()
+        updatedAt: Date.now()
     };
 
     // Update in persistence
-    await persistenceService.updateObject(roomId, objectId, { rotation: Number(rotation) });
+    await persistenceService.updateObject(roomId, objectId, { rotation: normalizedRotation });
 
     // Broadcast to other clients
     broadcastObjectUpdate(roomId, userId, 'object_rotated', updatedObject);
@@ -331,13 +450,24 @@ export async function rotateObject(context: ToolContext): Promise<any> {
     return {
         success: true,
         objectId,
-        newRotation: Number(rotation),
-        message: `Rotated object to ${rotation} degrees`
+        objectType: currentObject.type,
+        previousRotation: previousRotation,
+        newRotation: normalizedRotation,
+        rotationDelta: normalizedRotation - previousRotation,
+        message: `Rotated ${currentObject.type} object from ${previousRotation}° to ${normalizedRotation}°`
     };
 }
 
 export async function deleteObject(context: ToolContext): Promise<any> {
     const { objectId, roomId, userId } = context;
+
+    // Input validation
+    if (!objectId || typeof objectId !== 'string') {
+        throw new Error('Object ID must be a valid string');
+    }
+    if (objectId.trim().length === 0) {
+        throw new Error('Object ID cannot be empty');
+    }
 
     // Get current canvas state to verify object exists
     const canvasState = await persistenceService.getCanvasState(roomId);
@@ -353,17 +483,42 @@ export async function deleteObject(context: ToolContext): Promise<any> {
 
     const deletedObject = canvasState.objects[objectIndex];
 
+    // Store object details for confirmation
+    const objectDetails = {
+        id: deletedObject.id,
+        type: deletedObject.type,
+        position: { x: deletedObject.x, y: deletedObject.y },
+        ...((deletedObject as any).width && { width: (deletedObject as any).width }),
+        ...((deletedObject as any).height && { height: (deletedObject as any).height }),
+        ...((deletedObject as any).radius && { radius: (deletedObject as any).radius }),
+        ...((deletedObject as any).text && { text: (deletedObject as any).text }),
+        ...((deletedObject as any).fontSize && { fontSize: (deletedObject as any).fontSize }),
+        createdBy: (deletedObject as any).createdBy,
+        createdAt: deletedObject.createdAt
+    };
+
     // Remove from persistence
-    await persistenceService.deleteObject(roomId, objectId);
+    const deleteSuccess = await persistenceService.deleteObject(roomId, objectId);
+
+    if (!deleteSuccess) {
+        throw new Error(`Failed to delete object "${objectId}" from persistence`);
+    }
 
     // Broadcast to other clients
-    broadcastObjectUpdate(roomId, userId, 'object_deleted', { id: objectId });
+    broadcastObjectUpdate(roomId, userId, 'object_deleted', {
+        id: objectId,
+        deletedBy: userId,
+        deletedAt: Date.now()
+    });
 
     return {
         success: true,
         objectId,
-        deletedObject,
-        message: `Deleted ${deletedObject.type} object`
+        objectType: deletedObject.type,
+        deletedObject: objectDetails,
+        deletedBy: userId,
+        deletedAt: Date.now(),
+        message: `Deleted ${deletedObject.type} object "${objectId}" at position (${deletedObject.x}, ${deletedObject.y})`
     };
 }
 
