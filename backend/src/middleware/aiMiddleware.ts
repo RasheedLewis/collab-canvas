@@ -1,6 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAuthToken } from '../handlers/authHandler';
 
+// Extend Request interface locally to ensure TypeScript recognizes the user property
+interface AuthenticatedRequest extends Request {
+    user?: {
+        uid: string;
+        email: string | null;
+        name: string | null;
+        picture: string | null;
+    };
+}
+
 // Rate limiting store - in production, use Redis or similar
 interface RateLimitEntry {
     count: number;
@@ -36,7 +46,7 @@ let globalResetTime = Date.now() + RATE_LIMIT_CONFIG.windowMs;
  * AI Authentication Middleware
  * Verifies user authentication for AI endpoints
  */
-export async function aiAuthMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function aiAuthMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
         // Use existing auth verification with proper callback handling
         await new Promise<void>((resolve, reject) => {
@@ -79,7 +89,7 @@ export async function aiAuthMiddleware(req: Request, res: Response, next: NextFu
  * AI Rate Limiting Middleware
  * Implements both per-user and global rate limiting
  */
-export async function aiRateLimitMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function aiRateLimitMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
         const userId = req.user?.uid;
         if (!userId) {
@@ -185,7 +195,7 @@ export async function aiRateLimitMiddleware(req: Request, res: Response, next: N
  * Request Queue Middleware
  * Queues AI requests to prevent overwhelming the system
  */
-export async function aiRequestQueueMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function aiRequestQueueMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     const userId = req.user?.uid;
     if (!userId) {
         res.status(401).json({ error: 'User ID required for request queuing' });

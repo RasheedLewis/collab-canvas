@@ -104,6 +104,29 @@ app.get('/health', (_req, res) => {
 // Auth routes
 app.get('/api/auth/me', verifyAuthToken, getCurrentUser);
 
+// AI system status route (before AI routes to avoid conflicts)
+app.get('/api/ai/status', (_req, res) => {
+    try {
+        const rateLimitStatus = getRateLimitStatus();
+        const toolNames = toolRegistry.getAllTools().map(t => t.function.name);
+
+        res.json({
+            status: 'operational',
+            timestamp: new Date().toISOString(),
+            tools: {
+                loaded: toolNames.length,
+                available: toolNames
+            },
+            rateLimiting: rateLimitStatus
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
 // AI routes
 app.use('/api/ai', aiRoutes);
 
@@ -133,28 +156,6 @@ app.get('/api/websocket/protocol', (_req, res) => {
     res.json(protocolInfo);
 });
 
-// AI system status routes
-app.get('/api/ai/status', (_req, res) => {
-    try {
-        const rateLimitStatus = getRateLimitStatus();
-        const toolNames = toolRegistry.getAllTools().map(t => t.function.name);
-
-        res.json({
-            status: 'operational',
-            timestamp: new Date().toISOString(),
-            tools: {
-                loaded: toolNames.length,
-                available: toolNames
-            },
-            rateLimiting: rateLimitStatus
-        });
-    } catch (error) {
-        res.status(500).json({
-            status: 'error',
-            error: error instanceof Error ? error.message : 'Unknown error'
-        });
-    }
-});
 
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

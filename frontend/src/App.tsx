@@ -3,6 +3,8 @@ import Login from './components/Auth/Login';
 import Canvas from './components/Canvas/Canvas';
 import Toolbar from './components/Canvas/Toolbar';
 import { useCanvasStore } from './store/canvasStore';
+import { AIChat, AIFloatingButton } from './components/AI';
+import { useState } from 'react';
 import './App.css';
 
 // Main application component (inside AuthProvider)
@@ -116,6 +118,9 @@ function AppContent() {
 
       {/* Toolbar positioned absolutely within container */}
       <ToolbarWithDeleteHandler />
+      
+      {/* AI Components positioned absolutely */}
+      <AIComponents />
     </div>
   );
 }
@@ -125,11 +130,58 @@ function ToolbarWithDeleteHandler() {
   const { selectedObjectId } = useCanvasStore();
 
   // We'll pass a simple handler that just calls the Canvas component's delete function
-  return <Toolbar onDeleteSelected={selectedObjectId ? () => {
-    // Trigger keyboard delete event to use the Canvas component's delete logic
-    const deleteEvent = new KeyboardEvent('keydown', { key: 'Delete' });
-    window.dispatchEvent(deleteEvent);
-  } : undefined} />;
+  return (
+    <Toolbar 
+      onDeleteSelected={selectedObjectId ? () => {
+        // Trigger keyboard delete event to use the Canvas component's delete logic
+        const deleteEvent = new KeyboardEvent('keydown', { key: 'Delete' });
+        window.dispatchEvent(deleteEvent);
+      } : undefined}
+    />
+  );
+}
+
+// Separate component to handle AI functionality
+function AIComponents() {
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false);
+  const [isAIChatMinimized, setIsAIChatMinimized] = useState(false);
+
+  const handleAIChatToggle = () => {
+    if (isAIChatOpen) {
+      setIsAIChatOpen(false);
+      setIsAIChatMinimized(false);
+    } else {
+      setIsAIChatOpen(true);
+      setIsAIChatMinimized(false);
+    }
+  };
+
+  const handleAIChatMinimize = () => {
+    setIsAIChatMinimized(!isAIChatMinimized);
+  };
+
+  const handleAIChatClose = () => {
+    setIsAIChatOpen(false);
+    setIsAIChatMinimized(false);
+  };
+
+  return (
+    <>
+      {/* AI Floating Button positioned in bottom right */}
+      <AIFloatingButton
+        isOpen={isAIChatOpen}
+        onToggle={handleAIChatToggle}
+      />
+      
+      {/* AI Chat Component */}
+      <AIChat
+        isOpen={isAIChatOpen}
+        onClose={handleAIChatClose}
+        onMinimize={handleAIChatMinimize}
+        isMinimized={isAIChatMinimized}
+      />
+    </>
+  );
 }
 
 // Root App component with AuthProvider

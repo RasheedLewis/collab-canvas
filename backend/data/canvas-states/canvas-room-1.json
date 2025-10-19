@@ -1,6 +1,19 @@
 {
   "roomId": "canvas-room-1",
-  "objects": [],
-  "lastUpdated": 1760818403458,
-  "version": 238
+  "objects": [
+    {
+      "id": "1760906728651-e3kw6306i",
+      "x": 295,
+      "y": 253,
+      "type": "rectangle",
+      "color": "#3b82f6",
+      "createdAt": 1760906728653,
+      "updatedAt": 1760906728653,
+      "userId": "tq1mOMOQbWZRwN4799yuOpmfyVI2",
+      "width": 163,
+      "height": 111
+    }
+  ],
+  "lastUpdated": 1760906728653,
+  "version": 2
 }

@@ -22,13 +22,11 @@ export function initializeAIServices(
 
 // Request schemas
 const ChatRequestSchema = z.object({
-    message: z.string().min(1, 'Message is required'),
-    roomId: z.string().min(1, 'Room ID is required'),
-    userId: z.string().min(1, 'User ID is required'),
-    conversationHistory: z.array(z.object({
+    messages: z.array(z.object({
         role: z.enum(['user', 'assistant', 'system']),
         content: z.string()
-    })).optional().default([])
+    })).min(1, 'At least one message is required'),
+    roomId: z.string().min(1, 'Room ID is required')
 });
 
 const ExecuteToolRequestSchema = z.object({
@@ -53,7 +51,14 @@ export async function aiChatHandler(req: Request, res: Response): Promise<void> 
             return;
         }
 
-        const { message, roomId, userId, conversationHistory } = validationResult.data;
+        const { messages, roomId } = validationResult.data;
+
+        // Extract userId from authenticated request
+        const userId = (req as any).user?.uid;
+        if (!userId) {
+            res.status(401).json({ error: 'User authentication required' });
+            return;
+        }
 
         // Get current canvas state for context
         const canvasState = await persistenceService.getCanvasState(roomId) || { roomId, objects: [], lastUpdated: Date.now(), version: 1 };
@@ -80,15 +85,14 @@ Guidelines:
 4. Respect canvas boundaries and object relationships
 5. Provide helpful suggestions for canvas improvements`;
 
-        const messages = [
+        const conversationMessages = [
             { role: 'system' as const, content: systemPrompt },
-            ...conversationHistory,
-            { role: 'user' as const, content: message }
+            ...messages
         ];
 
         // Make OpenAI API call
         const apiResult = await openaiService.chatCompletion(
-            messages,
+            conversationMessages,
             toolSchemas.length > 0 ? toolSchemas : undefined,
             userId
         );
@@ -196,11 +200,11 @@ export async function executeToolHandler(req: Request, res: Response): Promise<v
  */
 export async function getCanvasContextHandler(req: Request, res: Response): Promise<void> {
     try {
-        const { roomId } = req.params;
+        const { roomId, includeMetadata } = req.query;
 
-        if (!roomId) {
+        if (!roomId || typeof roomId !== 'string') {
             res.status(400).json({
-                error: 'Room ID is required'
+                error: 'Room ID is required as a query parameter'
             });
             return;
         }
@@ -208,16 +212,21 @@ export async function getCanvasContextHandler(req: Request, res: Response): Prom
         // Get canvas state
         const canvasState = await persistenceService.getCanvasState(roomId) || { roomId, objects: [], lastUpdated: Date.now(), version: 1 };
 
-        // Analyze canvas content
-        const analysis = analyzeCanvasContent(canvasState.objects);
-
-        res.json({
+        // Build response object
+        const response: any = {
             roomId,
             timestamp: new Date().toISOString(),
-            canvasState,
-            analysis,
-            availableTools: toolRegistry.getAllTools().map(t => t.function.name)
-        });
+            canvasState
+        };
+
+        // Include analysis and metadata if requested
+        if (includeMetadata === 'true') {
+            const analysis = analyzeCanvasContent(canvasState.objects);
+            response.analysis = analysis;
+            response.availableTools = toolRegistry.getAllTools().map(t => t.function.name);
+        }
+
+        res.json(response);
 
     } catch (error) {
         console.error('Canvas Context Handler Error:', error);

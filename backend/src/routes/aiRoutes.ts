@@ -15,6 +15,6 @@ router.post('/chat', aiChatHandler);
 router.post('/execute-tool', executeToolHandler);
 
 // Get current canvas context for AI
-router.get('/canvas-context/:roomId', getCanvasContextHandler);
+router.get('/canvas-context', getCanvasContextHandler);
 
 export { router as aiRoutes };

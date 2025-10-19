@@ -123,11 +123,30 @@ export class CanvasPersistenceService {
         try {
             const filePath = this.getRoomFilePath(roomId);
             const data = await fs.readFile(filePath, 'utf8');
-            const state = JSON.parse(data) as CanvasState;
+
+            // Handle empty or corrupted files
+            if (!data || data.trim() === '') {
+                console.warn(`⚠️ Empty canvas state file for room ${roomId}, creating new state`);
+                // Delete the corrupted file and return undefined so a new state will be created
+                await fs.unlink(filePath).catch(() => { });
+                return undefined;
+            }
+
+            let state: CanvasState;
+            try {
+                state = JSON.parse(data) as CanvasState;
+            } catch (parseError) {
+                console.warn(`⚠️ Corrupted JSON in canvas state file for room ${roomId}, creating new state`);
+                // Delete the corrupted file and return undefined so a new state will be created
+                await fs.unlink(filePath).catch(() => { });
+                return undefined;
+            }
 
             // Validate the loaded state
             if (!this.validateCanvasState(state)) {
-                console.warn(`⚠️ Invalid canvas state loaded for room ${roomId}`);
+                console.warn(`⚠️ Invalid canvas state loaded for room ${roomId}, creating new state`);
+                // Delete the invalid file and return undefined so a new state will be created
+                await fs.unlink(filePath).catch(() => { });
                 return undefined;
             }
 
