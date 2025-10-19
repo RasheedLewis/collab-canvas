@@ -27,13 +27,91 @@ function generateObjectId(): string {
     return `obj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Utility function to broadcast object updates
+// Utility function to convert color names to hex
+function convertColorToHex(color: string): string {
+    console.log(`🎨 convertColorToHex called with: "${color}"`);
+
+    if (!color) {
+        console.log(`🎨 No color provided, using default blue`);
+        return '#3B82F6'; // Default blue
+    }
+
+    // If already a hex color, return as-is
+    if (/^#[0-9A-Fa-f]{6}$/.test(color)) {
+        console.log(`🎨 Already hex color, returning: ${color}`);
+        return color;
+    }
+
+    // Color name to hex mapping
+    const colorMap: Record<string, string> = {
+        'black': '#000000',
+        'white': '#FFFFFF',
+        'red': '#FF0000',
+        'green': '#008000',
+        'blue': '#0000FF',
+        'yellow': '#FFFF00',
+        'cyan': '#00FFFF',
+        'magenta': '#FF00FF',
+        'purple': '#800080',
+        'orange': '#FFA500',
+        'pink': '#FFC0CB',
+        'brown': '#A52A2A',
+        'gray': '#808080',
+        'grey': '#808080',
+        'lime': '#00FF00',
+        'navy': '#000080',
+        'olive': '#808000',
+        'maroon': '#800000',
+        'teal': '#008080',
+        'silver': '#C0C0C0',
+        'gold': '#FFD700'
+    };
+
+    // Try to find color name (case insensitive)
+    const normalizedColor = color.toLowerCase().trim();
+    console.log(`🎨 Normalized color: "${normalizedColor}"`);
+
+    if (colorMap[normalizedColor]) {
+        const hexColor = colorMap[normalizedColor];
+        console.log(`🎨 Found color mapping: "${normalizedColor}" → ${hexColor}`);
+        return hexColor;
+    }
+
+    // Try to handle rgb() format
+    const rgbMatch = color.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+    if (rgbMatch) {
+        const r = parseInt(rgbMatch[1]);
+        const g = parseInt(rgbMatch[2]);
+        const b = parseInt(rgbMatch[3]);
+        return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
+    }
+
+    console.warn(`Unknown color "${color}", using default blue`);
+    return '#3B82F6'; // Default blue if color not recognized
+}
+
+// Utility function to broadcast object updates using the same structure as toolbar tools
 function broadcastObjectUpdate(roomId: string, userId: string, messageType: string, object: any) {
+    console.log(`📡 broadcastObjectUpdate called - wsManager available: ${!!wsManager}`);
+    console.log(`📤 Broadcasting ${messageType} to room ${roomId} for user ${userId}`);
+    console.log(`📋 Object data:`, object);
+
     if (wsManager) {
-        wsManager.broadcastToRoom(roomId, {
+        // Use the same message structure as toolbar tools for consistency
+        const message = {
             type: messageType,
-            payload: { ...object, userId }
-        });
+            payload: {
+                roomId,
+                object: { ...object, fromAI: true }, // Add fromAI flag to the object itself
+                userId
+            },
+            timestamp: Date.now()
+        };
+        console.log(`🚀 Sending WebSocket message:`, message);
+        wsManager.broadcastToRoom(roomId, message);
+        console.log(`✅ WebSocket message sent successfully`);
+    } else {
+        console.error(`❌ WebSocket manager not available! Cannot broadcast ${messageType}`);
     }
 }
 
@@ -42,13 +120,29 @@ function broadcastObjectUpdate(roomId: string, userId: string, messageType: stri
  */
 
 export async function createRectangle(context: ToolContext): Promise<any> {
+    console.log('🎨 createRectangle called with full context:', context);
+
     const {
         x, y, width, height,
-        color = '#3B82F6',
-        strokeColor = '#1E40AF',
+        color: rawColor = '#3B82F6',
+        strokeColor: rawStrokeColor = '#1E40AF',
         strokeWidth = 2,
         roomId, userId
     } = context;
+
+    // Convert color names to hex
+    console.log(`🎨 createRectangle - Raw color input: "${rawColor}"`);
+    const color = convertColorToHex(rawColor);
+    const strokeColor = convertColorToHex(rawStrokeColor);
+    console.log(`🎨 createRectangle - Final color: "${color}"`);
+    console.log(`🎨 createRectangle - Final strokeColor: "${strokeColor}"`);
+
+    console.log('📐 Rectangle parameters:');
+    console.log(`   Position: (${x}, ${y})`);
+    console.log(`   Dimensions: ${width} × ${height}`);
+    console.log(`   Color: ${color}`);
+    console.log(`   Stroke: ${strokeColor} (${strokeWidth}px)`);
+    console.log(`   Room: ${roomId}, User: ${userId}`);
 
     // Input validation
     if (typeof x !== 'number' || typeof y !== 'number') {
@@ -60,12 +154,7 @@ export async function createRectangle(context: ToolContext): Promise<any> {
     if (typeof height !== 'number' || height <= 0) {
         throw new Error('Height must be a positive number');
     }
-    if (color && !/^#[0-9A-Fa-f]{6}$/.test(color)) {
-        throw new Error('Color must be a valid hex color (e.g., #3B82F6)');
-    }
-    if (strokeColor && !/^#[0-9A-Fa-f]{6}$/.test(strokeColor)) {
-        throw new Error('Stroke color must be a valid hex color (e.g., #1E40AF)');
-    }
+    // Color validation is now handled by convertColorToHex function
 
     const rectangle = {
         id: generateObjectId(),
@@ -74,21 +163,35 @@ export async function createRectangle(context: ToolContext): Promise<any> {
         y: Number(y),
         width: Number(width),
         height: Number(height),
-        color: color, // Use color field as expected by interface
-        fill: color,
-        stroke: strokeColor,
-        strokeWidth: Number(strokeWidth),
+        color: color,
         rotation: 0,
-        createdBy: userId,
         createdAt: Date.now(),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        userId: userId // Match frontend CanvasObject interface exactly
     };
 
     // Save to persistence
-    await persistenceService.createOrUpdateObject(roomId, rectangle);
+    console.log('💾 Saving rectangle to persistence...');
+    try {
+        await persistenceService.createOrUpdateObject(roomId, rectangle);
+        console.log('✅ Rectangle saved to persistence successfully');
+    } catch (error) {
+        console.error('❌ Failed to save rectangle to persistence:', error);
+        throw error;
+    }
 
-    // Broadcast to other clients
-    broadcastObjectUpdate(roomId, userId, 'object_created', rectangle);
+    // Broadcast to all clients (including creator for AI tools)
+    console.log('📡 Broadcasting rectangle creation...');
+    console.log('🔍 Pre-broadcast check - wsManager exists:', !!wsManager);
+    console.log('🔍 Pre-broadcast check - wsManager type:', typeof wsManager);
+
+    try {
+        broadcastObjectUpdate(roomId, userId, 'object_created', rectangle);
+        console.log('✅ Rectangle broadcast completed');
+    } catch (error) {
+        console.error('❌ Failed to broadcast rectangle:', error);
+        console.error('❌ Broadcast error details:', error);
+    }
 
     return {
         success: true,
@@ -99,13 +202,26 @@ export async function createRectangle(context: ToolContext): Promise<any> {
 }
 
 export async function createCircle(context: ToolContext): Promise<any> {
+    console.log('🎨 createCircle called with full context:', context);
+
     const {
         x, y, radius,
-        color = '#10B981',
-        strokeColor = '#047857',
+        color: rawColor = '#10B981',
+        strokeColor: rawStrokeColor = '#047857',
         strokeWidth = 2,
         roomId, userId
     } = context;
+
+    // Convert color names to hex
+    const color = convertColorToHex(rawColor);
+    const strokeColor = convertColorToHex(rawStrokeColor);
+
+    console.log('🔵 Circle parameters:');
+    console.log(`   Position: (${x}, ${y})`);
+    console.log(`   Radius: ${radius}`);
+    console.log(`   Color: ${color}`);
+    console.log(`   Stroke: ${strokeColor} (${strokeWidth}px)`);
+    console.log(`   Room: ${roomId}, User: ${userId}`);
 
     // Input validation
     if (typeof x !== 'number' || typeof y !== 'number') {
@@ -114,12 +230,7 @@ export async function createCircle(context: ToolContext): Promise<any> {
     if (typeof radius !== 'number' || radius <= 0) {
         throw new Error('Radius must be a positive number');
     }
-    if (color && !/^#[0-9A-Fa-f]{6}$/.test(color)) {
-        throw new Error('Color must be a valid hex color (e.g., #10B981)');
-    }
-    if (strokeColor && !/^#[0-9A-Fa-f]{6}$/.test(strokeColor)) {
-        throw new Error('Stroke color must be a valid hex color (e.g., #047857)');
-    }
+    // Color validation is now handled by convertColorToHex function
 
     const circle = {
         id: generateObjectId(),
@@ -127,21 +238,34 @@ export async function createCircle(context: ToolContext): Promise<any> {
         x: Number(x),
         y: Number(y),
         radius: Number(radius),
-        color: color, // Use color field as expected by interface
-        fill: color,
-        stroke: strokeColor,
-        strokeWidth: Number(strokeWidth),
-        rotation: 0,
-        createdBy: userId,
+        color: color,
         createdAt: Date.now(),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        userId: userId // Match frontend CanvasObject interface exactly
     };
 
     // Save to persistence
-    await persistenceService.createOrUpdateObject(roomId, circle);
+    console.log('💾 Saving circle to persistence...');
+    try {
+        await persistenceService.createOrUpdateObject(roomId, circle);
+        console.log('✅ Circle saved to persistence successfully');
+    } catch (error) {
+        console.error('❌ Failed to save circle to persistence:', error);
+        throw error;
+    }
 
-    // Broadcast to other clients
-    broadcastObjectUpdate(roomId, userId, 'object_created', circle);
+    // Broadcast to all clients (including creator for AI tools)
+    console.log('📡 Broadcasting circle creation...');
+    console.log('🔍 Pre-broadcast check - wsManager exists:', !!wsManager);
+    console.log('🔍 Pre-broadcast check - wsManager type:', typeof wsManager);
+
+    try {
+        broadcastObjectUpdate(roomId, userId, 'object_created', circle);
+        console.log('✅ Circle broadcast completed');
+    } catch (error) {
+        console.error('❌ Failed to broadcast circle:', error);
+        console.error('❌ Broadcast error details:', error);
+    }
 
     return {
         success: true,
@@ -155,10 +279,13 @@ export async function createText(context: ToolContext): Promise<any> {
     const {
         x, y, text,
         fontSize = 16,
-        color = '#1F2937',
+        color: rawColor = '#1F2937',
         fontFamily = 'Arial',
         roomId, userId
     } = context;
+
+    // Convert color names to hex
+    const color = convertColorToHex(rawColor);
 
     // Input validation
     if (typeof x !== 'number' || typeof y !== 'number') {
@@ -170,9 +297,7 @@ export async function createText(context: ToolContext): Promise<any> {
     if (typeof fontSize !== 'number' || fontSize <= 0 || fontSize > 200) {
         throw new Error('Font size must be a positive number between 1 and 200');
     }
-    if (color && !/^#[0-9A-Fa-f]{6}$/.test(color)) {
-        throw new Error('Color must be a valid hex color (e.g., #1F2937)');
-    }
+    // Color validation is now handled by convertColorToHex function
     if (fontFamily && typeof fontFamily !== 'string') {
         throw new Error('Font family must be a string');
     }
@@ -185,18 +310,16 @@ export async function createText(context: ToolContext): Promise<any> {
         text: String(text),
         fontSize: Number(fontSize),
         fontFamily,
-        color: color, // Use color field as expected by interface
-        fill: color,
-        rotation: 0,
-        createdBy: userId,
+        color: color,
         createdAt: Date.now(),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        userId: userId // Match frontend CanvasObject interface exactly
     };
 
     // Save to persistence
     await persistenceService.createOrUpdateObject(roomId, textObject);
 
-    // Broadcast to other clients
+    // Broadcast to all clients (including creator for AI tools)  
     broadcastObjectUpdate(roomId, userId, 'object_created', textObject);
 
     return {

@@ -4,12 +4,77 @@ import Canvas from './components/Canvas/Canvas';
 import Toolbar from './components/Canvas/Toolbar';
 import { useCanvasStore } from './store/canvasStore';
 import { AIChat, AIFloatingButton } from './components/AI';
-import { useState } from 'react';
+import { useWebSocket } from './hooks/useWebSocket';
+import { useAuthUser, useAuthUserProfile } from './store/authStore';
+import API from './lib/api';
+import { useState, useEffect } from 'react';
 import './App.css';
 
 // Main application component (inside AuthProvider)
 function AppContent() {
   const { user, loading } = useAuth();
+  
+  // Shared WebSocket connection for both Canvas and AI Chat
+  const authUser = useAuthUser();
+  const userProfile = useAuthUserProfile();
+  
+  const sharedWs = useWebSocket({
+    url: API.config.WS_URL,
+    ...API.config.WS_CONFIG
+  });
+
+  const {
+    isConnected,
+    clientId,
+    roomId,
+    sendMessage,
+    joinRoom
+  } = sharedWs;
+
+  // Connect and join room when authenticated
+  useEffect(() => {
+    if (!isConnected) {
+      sharedWs.connect();
+    }
+  }, [isConnected, sharedWs]);
+
+  // Color palette for user cursors (same as Canvas)
+  const cursorColors = [
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3',
+    '#54A0FF', '#5F27CD', '#00D2D3', '#FF9F43', '#10AC84', '#EE5A24',
+    '#0984e3', '#6c5ce7', '#fd79a8', '#fdcb6e'
+  ];
+
+  const getColorForUser = (userId: string): string => {
+    if (!userId) return cursorColors[0];
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) {
+      const char = userId.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    const colorIndex = Math.abs(hash) % cursorColors.length;
+    return cursorColors[colorIndex];
+  };
+
+  // Join room when connected
+  useEffect(() => {
+    if (isConnected && !roomId && authUser) {
+      const testRoomId = 'canvas-room-1';
+      const randomId = Math.random().toString(36).substring(2, 8);
+      
+      const userInfo = {
+        uid: authUser?.uid || clientId || 'anonymous',
+        email: authUser?.email || null,
+        name: authUser?.displayName || userProfile?.displayName || `User_${randomId}`,
+        picture: authUser?.photoURL || null,
+        displayName: userProfile?.displayName || authUser?.displayName || `User_${randomId}`,
+        avatarColor: userProfile?.avatarColor || getColorForUser(authUser?.uid || clientId || randomId)
+      };
+      
+      joinRoom(testRoomId, userInfo);
+    }
+  }, [isConnected, roomId, clientId, joinRoom, authUser, userProfile]);
 
   if (loading) {
     return (
@@ -113,14 +178,18 @@ function AppContent() {
   // User is authenticated - show main app with proper workspace container
   return (
     <div className="workspace-container">
-      {/* Canvas fills the container */}
-      <Canvas />
+      {/* Canvas fills the container with shared WebSocket */}
+      <Canvas webSocket={sharedWs} />
 
       {/* Toolbar positioned absolutely within container */}
       <ToolbarWithDeleteHandler />
       
-      {/* AI Components positioned absolutely */}
-      <AIComponents />
+      {/* AI Components positioned absolutely with shared WebSocket */}
+      <AIComponents canvasWebSocket={{
+        sendMessage,
+        isConnected,
+        roomId
+      }} />
     </div>
   );
 }
@@ -141,8 +210,14 @@ function ToolbarWithDeleteHandler() {
   );
 }
 
-// Separate component to handle AI functionality
-function AIComponents() {
+// Separate component to handle AI functionality  
+function AIComponents({ canvasWebSocket }: {
+  canvasWebSocket: {
+    sendMessage: (message: any) => void;
+    isConnected: boolean;
+    roomId: string | null;
+  };
+}) {
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [isAIChatMinimized, setIsAIChatMinimized] = useState(false);
 
@@ -179,6 +254,7 @@ function AIComponents() {
         onClose={handleAIChatClose}
         onMinimize={handleAIChatMinimize}
         isMinimized={isAIChatMinimized}
+        canvasWebSocket={canvasWebSocket}
       />
     </>
   );

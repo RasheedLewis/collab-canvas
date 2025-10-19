@@ -2,18 +2,95 @@
   "roomId": "canvas-room-1",
   "objects": [
     {
-      "id": "1760906728651-e3kw6306i",
-      "x": 295,
-      "y": 253,
+      "id": "1760907318090-la0oino3b",
+      "x": 239.23615267513512,
+      "y": -67.72601349589654,
+      "type": "circle",
+      "color": "#3b82f6",
+      "createdAt": 1760907318092,
+      "updatedAt": 1760907318092,
+      "userId": "tq1mOMOQbWZRwN4799yuOpmfyVI2",
+      "radius": 156.80697915150918
+    },
+    {
+      "id": "obj_1760908806464_m21ogmrya",
+      "type": "rectangle",
+      "x": 558.04,
+      "y": 111.13999999999999,
+      "width": 100,
+      "height": 100,
+      "color": "#008000",
+      "fill": "#008000",
+      "stroke": "#1E40AF",
+      "strokeWidth": 2,
+      "rotation": 0,
+      "createdBy": "tq1mOMOQbWZRwN4799yuOpmfyVI2",
+      "createdAt": 1760908806464,
+      "updatedAt": 1760909437896
+    },
+    {
+      "id": "obj_1760909735858_wtarap9ti",
+      "type": "rectangle",
+      "x": 448.64,
+      "y": 119.14,
+      "width": 100,
+      "height": 100,
+      "color": "#008000",
+      "fill": "#008000",
+      "stroke": "#1E40AF",
+      "strokeWidth": 2,
+      "rotation": 0,
+      "createdBy": "tq1mOMOQbWZRwN4799yuOpmfyVI2",
+      "createdAt": 1760909735858,
+      "updatedAt": 1760909735858
+    },
+    {
+      "id": "1760913052869-hatc74y65",
+      "x": 227,
+      "y": 361,
+      "type": "circle",
+      "color": "#f59e0b",
+      "createdAt": 1760913052880,
+      "updatedAt": 1760913052880,
+      "userId": "tq1mOMOQbWZRwN4799yuOpmfyVI2",
+      "radius": 120.41594578792295
+    },
+    {
+      "id": "1760913601744-qao99t2uu",
+      "x": 472,
+      "y": 356,
       "type": "rectangle",
       "color": "#3b82f6",
-      "createdAt": 1760906728653,
-      "updatedAt": 1760906728653,
+      "createdAt": 1760913601752,
+      "updatedAt": 1760913607538,
       "userId": "tq1mOMOQbWZRwN4799yuOpmfyVI2",
-      "width": 163,
-      "height": 111
+      "width": 100,
+      "height": 80
+    },
+    {
+      "id": "1760918030889-zs41wpc8m",
+      "x": 305.57332920230806,
+      "y": 249.7957515115363,
+      "type": "rectangle",
+      "color": "#3b82f6",
+      "createdAt": 1760918030935,
+      "updatedAt": 1760918053420,
+      "userId": "tq1mOMOQbWZRwN4799yuOpmfyVI2",
+      "width": 120,
+      "height": 80
+    },
+    {
+      "id": "1760918220028-dgfz864f4",
+      "x": 307.8938243174208,
+      "y": 620.3592478925843,
+      "type": "circle",
+      "color": "#8b5cf6",
+      "createdAt": 1760918220034,
+      "updatedAt": 1760918237664,
+      "userId": "tq1mOMOQbWZRwN4799yuOpmfyVI2",
+      "radius": 50
     }
   ],
-  "lastUpdated": 1760906728653,
-  "version": 2
+  "lastUpdated": 1760918237664,
+  "version": 34
 }

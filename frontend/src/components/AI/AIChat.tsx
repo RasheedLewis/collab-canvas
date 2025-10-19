@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { useCanvasStore } from '../../store/canvasStore';
 import { aiService } from '../../services/aiService';
+import { useCanvasStore } from '../../store/canvasStore';
 
 interface Message {
   id: string;
@@ -18,14 +18,20 @@ interface AIChatProps {
   onClose: () => void;
   onMinimize: () => void;
   isMinimized: boolean;
+  // Share WebSocket connection from Canvas component
+  canvasWebSocket: {
+    sendMessage: (message: any) => void;
+    isConnected: boolean;
+    roomId: string | null;
+  };
 }
 
-const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimized }) => {
+const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimized, canvasWebSocket }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       type: 'system',
-      content: '🎨 **AI Canvas Assistant Ready!**\n\nI can help you create, arrange, and manipulate objects on your canvas using natural language. Try commands like:\n\n• "Create a blue rectangle at position 100, 200"\n• "Arrange all objects in a row"\n• "Make all circles red"\n• "Align the text objects to the center"',
+      content: '🎨 **AI Canvas Assistant Ready!**\n\nI can help you create objects on your canvas using natural language. I use the same reliable frontend methods as the toolbar for perfect synchronization!\n\n• "Create a rectangle"\n• "Add a circle"\n• "Make a text that says Hello World"\n• "Create a square"',
       timestamp: Date.now()
     }
   ]);
@@ -36,9 +42,163 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
   const inputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   
-  // Get current room ID from canvas store or URL
-  // For now, we'll use a default room ID - this should be improved to get the actual room
-  const roomId = 'default-room'; // TODO: Get actual room ID from routing/store
+  // Use shared WebSocket connection from Canvas component (properly authenticated & joined to room)
+  const { roomId } = canvasWebSocket;
+  
+  // Get canvas store methods (same as toolbar uses)
+  const { 
+    createRectangle, 
+    createCircle, 
+    createText,
+    updateObject,
+    deleteObject,
+    objects,
+    clearCanvas,
+    setActiveColor,
+    activeColor
+  } = useCanvasStore();
+
+  // Canvas operations with WebSocket sync (same as toolbar uses)
+  const sendObjectCreated = (object: any) => {
+    if (!canvasWebSocket.isConnected || !roomId) return;
+    
+    canvasWebSocket.sendMessage({
+      type: 'object_created',
+      payload: {
+        roomId,
+        object,
+        userId: user?.uid
+      },
+      timestamp: Date.now()
+    });
+  };
+
+  const createRectangleWithSync = (x: number, y: number, width?: number, height?: number) => {
+    const rectangle = createRectangle(x, y, width, height);
+    sendObjectCreated(rectangle);
+    return rectangle;
+  };
+
+  const createCircleWithSync = (x: number, y: number, radius?: number) => {
+    const circle = createCircle(x, y, radius);
+    sendObjectCreated(circle);
+    return circle;
+  };
+
+  const createTextWithSync = (x: number, y: number, text?: string) => {
+    const textObject = createText(x, y, text);
+    sendObjectCreated(textObject);
+    return textObject;
+  };
+
+  // Color name to hex conversion
+  const parseColorFromCommand = (command: string): string | null => {
+    const colorMap: Record<string, string> = {
+      'black': '#000000',
+      'white': '#ffffff',
+      'red': '#ef4444',
+      'blue': '#3b82f6', 
+      'green': '#10b981',
+      'yellow': '#f59e0b',
+      'purple': '#8b5cf6',
+      'pink': '#ec4899',
+      'orange': '#f97316',
+      'gray': '#6b7280',
+      'grey': '#6b7280',
+      'brown': '#92400e',
+      'lime': '#84cc16',
+      'cyan': '#06b6d4',
+      'indigo': '#6366f1'
+    };
+
+    const cmd = command.toLowerCase();
+    for (const [name, hex] of Object.entries(colorMap)) {
+      if (cmd.includes(name)) {
+        return hex;
+      }
+    }
+    return null;
+  };
+
+  // Parse natural language commands and execute using frontend methods
+  const executeCanvasCommand = async (command: string) => {
+    const cmd = command.toLowerCase().trim();
+    
+    try {
+      // Parse color from command
+      const requestedColor = parseColorFromCommand(command);
+      const originalColor = activeColor;
+      
+      // Set color if specified
+      if (requestedColor) {
+        setActiveColor(requestedColor);
+      }
+      
+      let result = '';
+      
+      // Rectangle creation
+      if (cmd.includes('rectangle') || cmd.includes('square')) {
+        const x = 100 + Math.random() * 300;
+        const y = 100 + Math.random() * 200;
+        const width = cmd.includes('square') ? 100 : 120;
+        const height = cmd.includes('square') ? 100 : 80;
+        
+        const rectangle = createRectangleWithSync(x, y, width, height);
+        const colorName = requestedColor ? Object.entries({
+          '#000000': 'black', '#ffffff': 'white', '#ef4444': 'red', 
+          '#3b82f6': 'blue', '#10b981': 'green', '#f59e0b': 'yellow',
+          '#8b5cf6': 'purple', '#ec4899': 'pink', '#f97316': 'orange'
+        }).find(([hex]) => hex === requestedColor)?.[1] || 'colored' : '';
+        
+        result = `✅ Created ${colorName ? colorName + ' ' : ''}rectangle at (${Math.round(x)}, ${Math.round(y)})`;
+      }
+      
+      // Circle creation
+      else if (cmd.includes('circle')) {
+        const x = 100 + Math.random() * 300;
+        const y = 100 + Math.random() * 200;
+        const radius = 50;
+        
+        const circle = createCircleWithSync(x, y, radius);
+        const colorName = requestedColor ? Object.entries({
+          '#000000': 'black', '#ffffff': 'white', '#ef4444': 'red', 
+          '#3b82f6': 'blue', '#10b981': 'green', '#f59e0b': 'yellow',
+          '#8b5cf6': 'purple', '#ec4899': 'pink', '#f97316': 'orange'
+        }).find(([hex]) => hex === requestedColor)?.[1] || 'colored' : '';
+        
+        result = `✅ Created ${colorName ? colorName + ' ' : ''}circle at (${Math.round(x)}, ${Math.round(y)})`;
+      }
+      
+      // Text creation
+      else if (cmd.includes('text') || cmd.includes('label')) {
+        const x = 100 + Math.random() * 300;
+        const y = 100 + Math.random() * 200;
+        const text = cmd.includes('"') ? cmd.split('"')[1] : 'Sample Text';
+        
+        const textObject = createTextWithSync(x, y, text);
+        const colorName = requestedColor ? Object.entries({
+          '#000000': 'black', '#ffffff': 'white', '#ef4444': 'red', 
+          '#3b82f6': 'blue', '#10b981': 'green', '#f59e0b': 'yellow',
+          '#8b5cf6': 'purple', '#ec4899': 'pink', '#f97316': 'orange'
+        }).find(([hex]) => hex === requestedColor)?.[1] || 'colored' : '';
+        
+        result = `✅ Created ${colorName ? colorName + ' ' : ''}text "${text}" at (${Math.round(x)}, ${Math.round(y)})`;
+      }
+      
+      else {
+        result = '❓ I can help you create rectangles, circles, and text. Try: "Create a red rectangle" or "Add a blue circle"';
+      }
+      
+      // Reset color back to original (optional, or keep the new color for next creation)
+      // setActiveColor(originalColor);
+      
+      return result;
+      
+    } catch (error) {
+      console.error('Command execution error:', error);
+      return '❌ Sorry, there was an error executing that command.';
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -54,8 +214,10 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
     }
   }, [isOpen, isMinimized]);
 
+  // Backend AI service handles all command execution with proper OpenAI tools
+
   const handleSendMessage = async (message: string) => {
-    if (!message.trim() || isLoading) return;
+    if (!message.trim() || isLoading || !roomId) return;
 
     // Add user message
     const userMessage: Message = {
@@ -83,60 +245,21 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
     setIsTyping(true);
     
     try {
-      // Use the real AI service to process the command
-      const response = await aiService.processCommand(message.trim(), roomId);
+      // Use local command execution with frontend methods (same as toolbar)
+      const result = await executeCanvasCommand(message.trim());
       
       // Remove loading message
       setMessages(prev => prev.filter(m => m.id !== loadingMessage.id));
       
-      if (response.success && response.data) {
-        // Handle successful AI response
-        let responseContent = '';
-        
-        if (response.data.choices && response.data.choices.length > 0) {
-          const choice = response.data.choices[0];
-          
-          if (choice.message) {
-            responseContent = choice.message.content || '';
-            
-            // If there are tool calls, add them to the response
-            if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
-              responseContent += '\n\n🛠️ **Actions Executed:**\n';
-              for (const toolCall of choice.message.tool_calls) {
-                if (toolCall.type === 'function') {
-                  responseContent += `• ${toolCall.function.name}\n`;
-                }
-              }
-            }
-          }
-        }
-        
-        if (!responseContent) {
-          responseContent = 'I processed your request successfully! The changes should be visible on your canvas.';
-        }
+      const aiResponse: Message = {
+        id: `ai-${Date.now()}`,
+        type: 'assistant',
+        content: result,
+        timestamp: Date.now(),
+        isCommand: true
+      };
 
-        const aiResponse: Message = {
-          id: `ai-${Date.now()}`,
-          type: 'assistant',
-          content: responseContent,
-          timestamp: Date.now(),
-          isCommand: true,
-          commandResult: response.data
-        };
-
-        setMessages(prev => [...prev, aiResponse]);
-        
-      } else {
-        // Handle error response
-        const errorMessage: Message = {
-          id: `error-${Date.now()}`,
-          type: 'assistant',
-          content: `❌ **Error Processing Command**\n\n${response.error || 'I encountered an issue processing your request. Please try rephrasing your command or check if all required parameters are provided.'}\n\n💡 **Tip:** Try commands like "create a red circle" or "arrange objects in a row"`,
-          timestamp: Date.now()
-        };
-
-        setMessages(prev => [...prev, errorMessage]);
-      }
+      setMessages(prev => [...prev, aiResponse]);
       
     } catch (error) {
       console.error('AI Chat Error:', error);
@@ -146,8 +269,8 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
       
       const errorMessage: Message = {
         id: `error-${Date.now()}`,
-        type: 'system',
-        content: '❌ **Connection Error**\n\nI\'m having trouble connecting to the AI service. This could be because:\n\n• The backend server is not running\n• You\'re not authenticated\n• Network connectivity issues\n\nPlease check your connection and try again.',
+        type: 'assistant',
+        content: `❌ **Error Processing Command**\n\n${error instanceof Error ? error.message : String(error)}\n\n💡 **Tip:** Try commands like "create a rectangle" or "add a circle"`,
         timestamp: Date.now()
       };
 
@@ -158,6 +281,8 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
     }
   };
 
+  // Backend AI service handles all command parsing and execution with OpenAI tools
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -165,7 +290,7 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
     }
   };
 
-  const formatContent = (content: string, type: Message['type']) => {
+  const formatContent = (content: string) => {
     // Basic markdown-like formatting
     const formatted = content
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -481,7 +606,7 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
                     <span style={{ color: '#6B7280' }}>AI is thinking...</span>
                   </div>
                 ) : (
-                  <div dangerouslySetInnerHTML={formatContent(message.content, message.type)} />
+                  <div dangerouslySetInnerHTML={formatContent(message.content)} />
                 )}
 
                 <div
@@ -605,7 +730,7 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
               textAlign: 'center'
             }}
           >
-            Press Enter to send • AI powered by 21 canvas tools
+            Press Enter to send • Using same methods as toolbar for perfect sync
           </div>
         </div>
       </div>

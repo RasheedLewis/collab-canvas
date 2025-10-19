@@ -9,14 +9,22 @@ import ActiveUsers from './ActiveUsers';
 import SettingsButton from './SettingsButton';
 import ResizeTransformer from './ResizeTransformer';
 import { useCanvasStore } from '../../store/canvasStore';
-import { useWebSocket } from '../../hooks/useWebSocket';
 import { useAuthUser, useAuthUserProfile } from '../../store/authStore';
 import API from '../../lib/api';
 import type { RectangleObject, CircleObject, TextObject, CanvasObject } from '../../types/canvas';
 import type { 
   CursorMovedPayload, 
   CursorUpdatePayload, 
-  CursorLeftPayload
+  CursorLeftPayload,
+  ObjectCreatedMessage,
+  ObjectUpdatedMessage,
+  ObjectMovedMessage,
+  ObjectDeletedMessage,
+  ObjectResizedMessage,
+  ObjectRotatedMessage,
+  TextChangedMessage,
+  CanvasStateSyncMessage,
+  CanvasClearedMessage
 } from '../../types/websocket';
 
 // Interface for object interpolation state
@@ -55,11 +63,14 @@ interface RotationInterpolation {
 interface CanvasProps {
   width?: number;
   height?: number;
+  // Shared WebSocket connection passed from App component
+  webSocket: any; // Full WebSocket hook return object
 }
 
 const Canvas: React.FC<CanvasProps> = ({ 
   width = window.innerWidth, // Full viewport width
-  height = window.innerHeight // Full viewport height
+  height = window.innerHeight, // Full viewport height
+  webSocket // Shared WebSocket connection from App component
 }) => {
   const stageRef = useRef<Konva.Stage>(null);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
@@ -95,18 +106,12 @@ const Canvas: React.FC<CanvasProps> = ({
   const user = useAuthUser();
   const userProfile = useAuthUserProfile();
 
-  // WebSocket connection for real-time collaboration
-  const ws = useWebSocket({
-    url: API.config.WS_URL,
-    ...API.config.WS_CONFIG
-  });
-
+  // Use shared WebSocket connection from App component (already connected & authenticated)
   const {
     isConnected,
     clientId,
     roomId,
     sendMessage,
-    joinRoom,
     onMessage,
     onCursorMoved,
     onCursorUpdate,
@@ -120,7 +125,7 @@ const Canvas: React.FC<CanvasProps> = ({
     onTextChanged,
     onCanvasStateSync,
     onCanvasCleared,
-  } = ws;
+  } = webSocket;
 
   // State for tracking other users' cursors with interpolation
   const [otherCursors, setOtherCursors] = useState<Map<string, {
@@ -165,11 +170,7 @@ const Canvas: React.FC<CanvasProps> = ({
   const [, forceRerender] = useState({});
 
   // Auto-connect to WebSocket and join a test room
-  useEffect(() => {
-    if (!isConnected) {
-      ws.connect();
-    }
-  }, [isConnected, ws]);
+  // WebSocket connection and room joining is now handled in App.tsx
 
   // Color palette for user cursors (vibrant, distinct colors)
   const cursorColors = [
@@ -208,26 +209,7 @@ const Canvas: React.FC<CanvasProps> = ({
     return cursorColors[colorIndex];
   };
 
-  // Join a test room when connected
-  useEffect(() => {
-    if (isConnected && !roomId) {
-      // Join a test room with user info
-      const testRoomId = 'canvas-room-1';
-      const randomId = Math.random().toString(36).substring(2, 8);
-      
-      // Use actual user profile data if available, otherwise fallback to generated data
-      const userInfo = {
-        uid: user?.uid || clientId || 'anonymous',
-        email: user?.email || null,
-        name: user?.displayName || userProfile?.displayName || `User_${randomId}`,
-        picture: user?.photoURL || null,
-        displayName: userProfile?.displayName || user?.displayName || `User_${randomId}`,
-        avatarColor: userProfile?.avatarColor || getColorForUser(user?.uid || clientId || randomId)
-      };
-      
-      joinRoom(testRoomId, userInfo);
-    }
-  }, [isConnected, roomId, clientId, joinRoom, user, userProfile]);
+  // Room joining is now handled in App.tsx before Canvas is rendered
 
   // Smooth interpolation functions
   const easeOutQuad = (t: number): number => t * (2 - t);
@@ -631,11 +613,12 @@ const Canvas: React.FC<CanvasProps> = ({
       type: 'object_created',
       payload: {
         roomId,
-        object
+        object,
+        userId: user?.uid || clientId // Include userId to match AI tools API
       },
       timestamp: Date.now()
     });
-  }, [isConnected, roomId, sendMessage]);
+  }, [isConnected, roomId, sendMessage, user?.uid, clientId]);
 
   const sendObjectMoved = useCallback((objectId: string, x: number, y: number) => {
     if (!isConnected || !roomId) return;
@@ -843,14 +826,40 @@ const Canvas: React.FC<CanvasProps> = ({
   useEffect(() => {
     console.log('🔄 Setting up object synchronization event handlers, including rotation');
     
-    const unsubscribeObjectCreated = onObjectCreated((payload) => {
-      // Don't add our own objects (they're already in the store)
-      if (payload.userId === clientId) return;
+    const unsubscribeObjectCreated = onObjectCreated((payload: ObjectCreatedMessage['payload']) => {
+      console.log('🔍 Frontend received object_created:', payload);
+      console.log('📋 WebSocket Client ID:', clientId);
+      console.log('🆔 User UID:', user?.uid);
+      console.log('👤 Payload user ID:', payload.userId); 
+      console.log('🤖 From AI flag:', (payload.object as any)?.fromAI);
       
-      addObject(payload.object as CanvasObject);
+      // Check if this is our own object by comparing both WebSocket client ID and Firebase UID
+      const isOwnObjectByClientId = payload.userId === clientId;
+      const isOwnObjectByFirebaseUid = payload.userId === user?.uid;
+      const isFromAI = (payload.object as any)?.fromAI;
+      
+      console.log('🔎 Ownership check:');
+      console.log('   By Client ID:', isOwnObjectByClientId);
+      console.log('   By Firebase UID:', isOwnObjectByFirebaseUid);
+      console.log('   From AI:', isFromAI);
+      
+      // Don't add our own objects (they're already in the store) UNLESS they're from AI
+      if ((isOwnObjectByClientId || isOwnObjectByFirebaseUid) && !isFromAI) {
+        console.log('⏭️ Skipping own object (not from AI)');
+        return;
+      }
+      
+      // Both toolbar and AI objects now use the same structure: payload.object
+      const objectToAdd = payload.object as CanvasObject;
+      
+      // Remove the fromAI flag before adding to store
+      const cleanObject = { ...objectToAdd };
+      delete (cleanObject as any).fromAI;
+      
+      addObject(cleanObject);
     });
 
-    const unsubscribeObjectMoved = onObjectMoved((payload) => {
+    const unsubscribeObjectMoved = onObjectMoved((payload: ObjectMovedMessage['payload']) => {
       // Don't update our own moves (they're already in the store)  
       if (payload.userId === clientId) return;
       
@@ -897,7 +906,7 @@ const Canvas: React.FC<CanvasProps> = ({
       });
     });
 
-    const unsubscribeObjectUpdated = onObjectUpdated((payload) => {
+    const unsubscribeObjectUpdated = onObjectUpdated((payload: ObjectUpdatedMessage['payload']) => {
       // Don't update our own changes (they're already in the store)
       if (payload.userId === clientId) return;
       
@@ -905,7 +914,7 @@ const Canvas: React.FC<CanvasProps> = ({
     });
 
     console.log('🗑️ Setting up onObjectDeleted listener');
-    const unsubscribeObjectDeleted = onObjectDeleted((payload) => {
+    const unsubscribeObjectDeleted = onObjectDeleted((payload: ObjectDeletedMessage['payload']) => {
       console.log('🗑️ Received object deletion:', payload);
       
       // Don't delete our own objects (they're already removed from the store)
@@ -918,7 +927,7 @@ const Canvas: React.FC<CanvasProps> = ({
       deleteObject(payload.objectId);
     });
 
-    const unsubscribeObjectResized = onObjectResized((payload) => {
+    const unsubscribeObjectResized = onObjectResized((payload: ObjectResizedMessage['payload']) => {
       // Don't update our own resize changes (they're already in the store)
       if (payload.userId === clientId) return;
       
@@ -984,7 +993,7 @@ const Canvas: React.FC<CanvasProps> = ({
     });
 
     console.log('🔄 Setting up onObjectRotated listener');
-    const unsubscribeObjectRotated = onObjectRotated((payload) => {
+    const unsubscribeObjectRotated = onObjectRotated((payload: ObjectRotatedMessage['payload']) => {
       console.log('🔄 Received object rotation:', payload);
       
       // Don't update our own rotation changes (they're already in the store)
@@ -1062,7 +1071,7 @@ const Canvas: React.FC<CanvasProps> = ({
       }
     });
 
-    const unsubscribeTextChanged = onTextChanged((payload) => {
+    const unsubscribeTextChanged = onTextChanged((payload: TextChangedMessage['payload']) => {
       // Don't update our own text changes (they're already in the store)
       if (payload.userId === clientId) return;
       
@@ -1074,20 +1083,20 @@ const Canvas: React.FC<CanvasProps> = ({
       });
     });
 
-    const unsubscribeCanvasStateSync = onCanvasStateSync((payload) => {
+    const unsubscribeCanvasStateSync = onCanvasStateSync((payload: CanvasStateSyncMessage['payload']) => {
       console.log(`📥 Received canvas state: ${payload.objects.length} objects`);
       
       // Clear existing objects first (important for page refreshes)
       clearCanvas();
       
       // Add all objects from synced state
-      payload.objects.forEach(object => {
+      payload.objects.forEach((object: any) => {
         addObject(object as CanvasObject);
       });
     });
 
     console.log('🧹 Setting up onCanvasCleared listener');
-    const unsubscribeCanvasCleared = onCanvasCleared((payload) => {
+    const unsubscribeCanvasCleared = onCanvasCleared((payload: CanvasClearedMessage['payload']) => {
       console.log('🧹 Received canvas clear:', payload);
       
       // Don't clear our own canvas (it's already cleared)
@@ -1115,7 +1124,7 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Listen for room join events and request canvas state
   useEffect(() => {
-    const unsubscribeMessage = onMessage((message) => {
+    const unsubscribeMessage = onMessage((message: any) => {
       if (message.type === 'room_joined') {
         console.log(`🏠 Successfully joined room, requesting canvas state...`);
         // Small delay to ensure the server is ready
@@ -1163,11 +1172,19 @@ const Canvas: React.FC<CanvasProps> = ({
 
   // Wrapper function for object movement with broadcasting
   const moveObjectWithSync = useCallback((objectId: string, x: number, y: number) => {
+    // Check if object exists in store before attempting to move
+    const existingObject = objects.find(obj => obj.id === objectId);
+    
+    if (!existingObject) {
+      console.error(`❌ Cannot move object ${objectId} - not found in store!`);
+      return;
+    }
+    
     // Update local store first (optimistic update)
     updateObject(objectId, { x, y });
     // Then broadcast to other users
     sendObjectMoved(objectId, x, y);
-  }, [updateObject, sendObjectMoved]);
+  }, [updateObject, sendObjectMoved, objects]);
 
   // Wrapper function for text changes with broadcasting
   const changeTextWithSync = useCallback((

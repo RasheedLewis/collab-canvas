@@ -490,12 +490,12 @@ export class WebSocketConnectionManager {
             return;
         }
 
-        // Add user ID to the object if not present
+        // Add user ID and timestamps if not present (preserve existing ones)
         const objectWithUser = {
             ...object,
             userId: object.userId || clientId,
-            createdAt: Date.now(),
-            updatedAt: Date.now()
+            createdAt: object.createdAt || Date.now(),
+            updatedAt: object.updatedAt || Date.now()
         };
 
         try {

@@ -105,13 +105,91 @@ Guidelines:
 
         // Handle tool calls if present
         let toolResults: any[] = [];
+        let finalResponse = response;
+
         if (response.choices[0]?.message?.tool_calls) {
             for (const toolCall of response.choices[0].message.tool_calls) {
                 if (toolCall.type === 'function') {
                     try {
+                        console.log(`🔧 Parsing arguments for ${toolCall.function.name}:`);
+                        console.log(`📝 Raw arguments:`, toolCall.function.arguments);
+
+                        let parsedArgs;
+                        try {
+                            // Try to parse as-is first
+                            parsedArgs = JSON.parse(toolCall.function.arguments);
+                            console.log(`✅ Parsed arguments successfully:`, parsedArgs);
+                        } catch (parseError) {
+                            console.log(`🔧 Attempting to fix AI-generated JSON with math expressions...`);
+
+                            try {
+                                // Sanitize AI-generated math expressions in JSON
+                                let sanitizedJson = toolCall.function.arguments;
+                                let maxIterations = 10; // Prevent infinite loops
+                                let iteration = 0;
+
+                                // Keep processing until no more math expressions found
+                                while (iteration < maxIterations) {
+                                    const originalJson = sanitizedJson;
+
+                                    // Fix unquoted math expressions: "key": a + b + c -> "key": result  
+                                    sanitizedJson = sanitizedJson
+                                        .replace(/:\s*(\d+\.?\d*)\s*\+\s*(\d+\.?\d*)/g, (match, a, b) => {
+                                            const result = parseFloat(a) + parseFloat(b);
+                                            console.log(`   Fixed unquoted add: ${match} → : ${result}`);
+                                            return `: ${result}`;
+                                        })
+                                        .replace(/:\s*(\d+\.?\d*)\s*-\s*(\d+\.?\d*)/g, (match, a, b) => {
+                                            const result = parseFloat(a) - parseFloat(b);
+                                            console.log(`   Fixed unquoted subtract: ${match} → : ${result}`);
+                                            return `: ${result}`;
+                                        })
+                                        .replace(/:\s*(\d+\.?\d*)\s*\*\s*(\d+\.?\d*)/g, (match, a, b) => {
+                                            const result = parseFloat(a) * parseFloat(b);
+                                            console.log(`   Fixed unquoted multiply: ${match} → : ${result}`);
+                                            return `: ${result}`;
+                                        })
+                                        .replace(/:\s*(\d+\.?\d*)\s*\/\s*(\d+\.?\d*)/g, (match, a, b) => {
+                                            const result = parseFloat(a) / parseFloat(b);
+                                            console.log(`   Fixed unquoted divide: ${match} → : ${result}`);
+                                            return `: ${result}`;
+                                        })
+                                        // Fix quoted math expressions
+                                        .replace(/"(\d+\.?\d*)\s*\+\s*(\d+\.?\d*)"/g, (match, a, b) => {
+                                            const result = parseFloat(a) + parseFloat(b);
+                                            console.log(`   Fixed quoted add: ${match} → "${result}"`);
+                                            return `"${result}"`;
+                                        })
+                                        .replace(/"(\d+\.?\d*)\s*-\s*(\d+\.?\d*)"/g, (match, a, b) => {
+                                            const result = parseFloat(a) - parseFloat(b);
+                                            console.log(`   Fixed quoted subtract: ${match} → "${result}"`);
+                                            return `"${result}"`;
+                                        });
+
+                                    // If no changes made, we're done
+                                    if (sanitizedJson === originalJson) {
+                                        break;
+                                    }
+
+                                    iteration++;
+                                    console.log(`   Iteration ${iteration}: Applied math fixes`);
+                                }
+
+                                console.log(`🔧 Sanitized JSON (${iteration} iterations):`, sanitizedJson);
+                                parsedArgs = JSON.parse(sanitizedJson);
+                                console.log(`✅ Successfully parsed sanitized JSON:`, parsedArgs);
+                            } catch (sanitizeError) {
+                                console.error(`❌ JSON Parse Error for ${toolCall.function.name}:`);
+                                console.error(`   Raw JSON: ${toolCall.function.arguments}`);
+                                console.error(`   Parse Error: ${parseError instanceof Error ? parseError.message : parseError}`);
+                                console.error(`   Sanitize Error: ${sanitizeError instanceof Error ? sanitizeError.message : sanitizeError}`);
+                                throw new Error(`Invalid JSON arguments: ${parseError instanceof Error ? parseError.message : parseError}`);
+                            }
+                        }
+
                         const result = await toolRegistry.executeTool(
                             toolCall.function.name,
-                            JSON.parse(toolCall.function.arguments),
+                            parsedArgs,
                             { userId, roomId, timestamp: Date.now() }
                         );
                         toolResults.push({
@@ -120,7 +198,7 @@ Guidelines:
                             result
                         });
                     } catch (error) {
-                        console.error(`Tool execution error for ${toolCall.function.name}:`, error);
+                        console.error(`❌ Tool execution error for ${toolCall.function.name}:`, error);
                         toolResults.push({
                             tool_call_id: toolCall.id,
                             name: toolCall.function.name,
@@ -129,16 +207,96 @@ Guidelines:
                     }
                 }
             }
+
+            // Continue conversation if tools were executed
+            if (toolResults.length > 0) {
+                console.log('🔄 Continuing conversation with tool results...');
+
+                // Build follow-up conversation with tool results
+                const followUpMessages = [
+                    ...conversationMessages,
+                    {
+                        role: 'assistant' as const,
+                        content: response.choices[0]?.message?.content || '',
+                        tool_calls: response.choices[0]?.message?.tool_calls
+                    },
+                    ...toolResults.map(result => ({
+                        role: 'tool' as const,
+                        content: JSON.stringify(result.result),
+                        tool_call_id: result.tool_call_id
+                    }))
+                ];
+
+                // Make follow-up API call to complete the task
+                const followUpResult = await openaiService.chatCompletion(
+                    followUpMessages,
+                    toolSchemas.length > 0 ? toolSchemas : undefined,
+                    userId
+                );
+
+                if (followUpResult.success && followUpResult.response) {
+                    finalResponse = followUpResult.response;
+
+                    // Execute any additional tool calls from the follow-up
+                    if (finalResponse.choices[0]?.message?.tool_calls) {
+                        for (const toolCall of finalResponse.choices[0].message.tool_calls) {
+                            if (toolCall.type === 'function') {
+                                try {
+                                    console.log(`🔧 Follow-up: Parsing arguments for ${toolCall.function.name}:`);
+                                    console.log(`📝 Follow-up Raw arguments:`, toolCall.function.arguments);
+
+                                    let parsedArgs;
+                                    try {
+                                        parsedArgs = JSON.parse(toolCall.function.arguments);
+                                        console.log(`✅ Follow-up: Parsed arguments successfully:`, parsedArgs);
+                                    } catch (parseError) {
+                                        console.error(`❌ Follow-up JSON Parse Error for ${toolCall.function.name}:`);
+                                        console.error(`   Raw JSON: ${toolCall.function.arguments}`);
+                                        console.error(`   Error: ${parseError instanceof Error ? parseError.message : parseError}`);
+                                        throw new Error(`Invalid JSON arguments: ${parseError instanceof Error ? parseError.message : parseError}`);
+                                    }
+
+                                    const result = await toolRegistry.executeTool(
+                                        toolCall.function.name,
+                                        parsedArgs,
+                                        { userId, roomId, timestamp: Date.now() }
+                                    );
+                                    toolResults.push({
+                                        tool_call_id: toolCall.id,
+                                        name: toolCall.function.name,
+                                        result
+                                    });
+                                } catch (error) {
+                                    console.error(`❌ Follow-up tool execution error for ${toolCall.function.name}:`, error);
+                                    toolResults.push({
+                                        tool_call_id: toolCall.id,
+                                        name: toolCall.function.name,
+                                        error: error instanceof Error ? error.message : 'Unknown error'
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    console.log('✅ Follow-up conversation completed');
+                }
+            }
         }
 
+        // Log the final AI response for debugging
+        console.log('🤖 Final AI Response Details:');
+        console.log('   Message content:', finalResponse.choices[0]?.message?.content);
+        console.log('   Tool calls made:', toolResults.length);
+        console.log('   Total tools executed:', toolResults.map(r => r.name).join(', '));
+
         res.json({
-            message: response.choices[0]?.message?.content || '',
-            toolCalls: response.choices[0]?.message?.tool_calls || [],
+            message: finalResponse.choices[0]?.message?.content || '',
+            toolCalls: finalResponse.choices[0]?.message?.tool_calls || [],
             toolResults,
             usage: {
-                promptTokens: response.usage?.prompt_tokens,
-                completionTokens: response.usage?.completion_tokens,
-                totalTokens: response.usage?.total_tokens
+                promptTokens: finalResponse.usage?.prompt_tokens,
+                completionTokens: finalResponse.usage?.completion_tokens,
+                totalTokens: finalResponse.usage?.total_tokens
             },
             cost: apiResult.cost,
             latency: apiResult.latency

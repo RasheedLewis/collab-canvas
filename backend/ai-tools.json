@@ -26,7 +26,7 @@
                         },
                         "color": {
                             "type": "string",
-                            "description": "Fill color (hex, rgb, or color name)"
+                            "description": "Fill color - accepts hex codes (#FF0000), color names (red, blue, black, white, etc.), or rgb(r,g,b) format"
                         },
                         "strokeColor": {
                             "type": "string",
@@ -69,7 +69,7 @@
                         },
                         "color": {
                             "type": "string",
-                            "description": "Fill color (hex, rgb, or color name)"
+                            "description": "Fill color - accepts hex codes (#FF0000), color names (red, blue, black, white, etc.), or rgb(r,g,b) format"
                         },
                         "strokeColor": {
                             "type": "string",
@@ -121,7 +121,7 @@
                         },
                         "color": {
                             "type": "string",
-                            "description": "Text color",
+                            "description": "Text color - accepts hex codes (#FF0000), color names (red, blue, black, white, etc.), or rgb(r,g,b) format",
                             "default": "#000000"
                         },
                         "fontStyle": {

@@ -1,0 +1,23 @@
+{
+  "roomId": "test-room",
+  "objects": [
+    {
+      "id": "obj_1760907567330_cupqwh0ol",
+      "type": "rectangle",
+      "x": 100,
+      "y": 100,
+      "width": 50,
+      "height": 30,
+      "color": "#FF0000",
+      "fill": "#FF0000",
+      "stroke": "#1E40AF",
+      "strokeWidth": 2,
+      "rotation": 0,
+      "createdBy": "test-user",
+      "createdAt": 1760907567330,
+      "updatedAt": 1760907567330
+    }
+  ],
+  "lastUpdated": 1760907567330,
+  "version": 2
+}
