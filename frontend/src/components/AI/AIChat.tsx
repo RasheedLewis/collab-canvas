@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { aiService } from '../../services/aiService';
 import { useCanvasStore } from '../../store/canvasStore';
 
 interface Message {
@@ -50,12 +49,7 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
     createRectangle, 
     createCircle, 
     createText,
-    updateObject,
-    deleteObject,
-    objects,
-    clearCanvas,
-    setActiveColor,
-    activeColor
+    setActiveColor
   } = useCanvasStore();
 
   // Canvas operations with WebSocket sync (same as toolbar uses)
@@ -127,7 +121,6 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
     try {
       // Parse color from command
       const requestedColor = parseColorFromCommand(command);
-      const originalColor = activeColor;
       
       // Set color if specified
       if (requestedColor) {
@@ -143,7 +136,7 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
         const width = cmd.includes('square') ? 100 : 120;
         const height = cmd.includes('square') ? 100 : 80;
         
-        const rectangle = createRectangleWithSync(x, y, width, height);
+        createRectangleWithSync(x, y, width, height);
         const colorName = requestedColor ? Object.entries({
           '#000000': 'black', '#ffffff': 'white', '#ef4444': 'red', 
           '#3b82f6': 'blue', '#10b981': 'green', '#f59e0b': 'yellow',
@@ -159,7 +152,7 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
         const y = 100 + Math.random() * 200;
         const radius = 50;
         
-        const circle = createCircleWithSync(x, y, radius);
+        createCircleWithSync(x, y, radius);
         const colorName = requestedColor ? Object.entries({
           '#000000': 'black', '#ffffff': 'white', '#ef4444': 'red', 
           '#3b82f6': 'blue', '#10b981': 'green', '#f59e0b': 'yellow',
@@ -175,7 +168,7 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, onMinimize, isMinimize
         const y = 100 + Math.random() * 200;
         const text = cmd.includes('"') ? cmd.split('"')[1] : 'Sample Text';
         
-        const textObject = createTextWithSync(x, y, text);
+        createTextWithSync(x, y, text);
         const colorName = requestedColor ? Object.entries({
           '#000000': 'black', '#ffffff': 'white', '#ef4444': 'red', 
           '#3b82f6': 'blue', '#10b981': 'green', '#f59e0b': 'yellow',
