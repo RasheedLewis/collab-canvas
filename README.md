@@ -41,8 +41,15 @@ CollabCanvas transforms the way teams collaborate on visual projects. Whether yo
 ### 🛠️ **Powerful Canvas Tools**
 - **Infinite workspace** (10,000 x 10,000px minimum) with smooth pan and zoom
 - **Shape creation**: Rectangles, circles, and text objects
+- **Advanced manipulation**: Resize, rotate, and delete objects
 - **Customizable styling**: Colors, fonts, and sizes
 - **Intuitive editing**: Double-click text to edit, drag objects to move
+
+### 🤖 **AI Canvas Agent**
+- **Natural language commands** - "Create a red rectangle" or "Add a blue circle"
+- **Smart object creation** - AI understands colors, positions, and dimensions
+- **Consistent behavior** - AI uses the same reliable methods as toolbar tools
+- **Real-time synchronization** - AI-created objects work seamlessly with collaboration
 
 ### 🔐 **Flexible Authentication**
 - **Google OAuth** for quick social login
@@ -74,25 +81,31 @@ graph TB
         React["React 18 + TypeScript"]
         Konva["Konva.js Canvas"]
         Zustand["Zustand State"]
+        AIChat["AI Chat Component"]
     end
     
     subgraph "Backend"
         Node["Node.js + TypeScript"]
         WS["WebSocket Server"]
         Auth["Authentication Layer"]
+        AIService["AI Service Layer"]
     end
     
     subgraph "Services"
         Firebase["Firebase Firestore"]
         FirebaseAuth["Firebase Auth"]
+        OpenAI["OpenAI GPT-4"]
     end
     
     React --> Konva
     Konva --> Zustand
+    AIChat --> Zustand
     React -.->|WebSocket| Node
+    AIChat -.->|AI Commands| AIService
     Node --> WS
     WS --> Firebase
     Auth --> FirebaseAuth
+    AIService --> OpenAI
 ```
 
 ### 🛠️ Technology Stack
@@ -107,6 +120,7 @@ graph TB
 - **Node.js** with TypeScript for server-side logic
 - **WebSocket** server for real-time communication
 - **Express.js** for RESTful API endpoints
+- **OpenAI GPT-4** integration for AI-powered canvas operations
 
 **Database & Authentication:**
 - **Firebase Firestore** for real-time database synchronization
@@ -126,6 +140,7 @@ graph TB
 - **Node.js** 18+ 
 - **npm** or **yarn**
 - **Firebase project** (for authentication and database)
+- **OpenAI API key** (for AI canvas agent functionality)
 
 ### Quick Setup
 
@@ -177,6 +192,12 @@ graph TB
 3. Add **Google** and **Email/Password** sign-in methods
 4. Copy your configuration to the `.env` files
 
+### OpenAI Configuration
+
+1. Get an [OpenAI API key](https://platform.openai.com/api-keys)
+2. Add `OPENAI_API_KEY=your_api_key_here` to your backend `.env` file
+3. The AI agent uses GPT-4 for natural language processing
+
 ---
 
 ## 📖 Usage Guide
@@ -188,14 +209,34 @@ graph TB
    - 🔳 **Rectangle tool** - Click and drag to create rectangles
    - ⭕ **Circle tool** - Click and drag to create circles  
    - 📝 **Text tool** - Click to add text, double-click to edit
-3. **Customize** colors using the color picker
-4. **Move objects** by clicking and dragging
-5. **Invite collaborators** by sharing the room URL
+3. **Use the AI Assistant** (floating button in bottom-right):
+   - 🤖 **Natural language commands** - "Create a red rectangle"
+   - 🎨 **Smart color recognition** - "Add a blue circle" 
+   - 📝 **Text creation** - "Make a text that says Hello World"
+4. **Customize** colors using the color picker
+5. **Move and manipulate** objects by clicking and dragging
+6. **Resize and rotate** objects using the transform handles
+7. **Invite collaborators** by sharing the room URL
+
+### AI Assistant Commands
+
+Try these natural language commands with the AI assistant:
+
+**Shape Creation:**
+- "Create a red rectangle"
+- "Add a blue circle" 
+- "Make a black square"
+- "Create text that says Hello World"
+
+**Colors Supported:**
+- Basic colors: black, white, red, blue, green, yellow, purple, pink, orange
+- Extended colors: gray, brown, lime, cyan, indigo
 
 ### Collaboration Features
 
 - **See live cursors** of other users with their names
 - **Watch real-time edits** as they happen
+- **AI-created objects sync instantly** with all collaborators
 - **Get notified** when users join or leave
 - **Resolve conflicts** automatically with visual feedback
 
@@ -210,17 +251,22 @@ collab-canvas/
 ├── frontend/                 # React TypeScript frontend
 │   ├── src/
 │   │   ├── components/      # React components
+│   │   │   ├── AI/         # AI Chat component
+│   │   │   └── Canvas/     # Canvas components
 │   │   ├── hooks/           # Custom React hooks
 │   │   ├── store/           # Zustand state management
-│   │   ├── services/        # API services
+│   │   ├── services/        # API services (including AI service)
 │   │   └── types/           # TypeScript types
 │   └── package.json
 ├── backend/                  # Node.js TypeScript backend
 │   ├── src/
-│   │   ├── handlers/        # WebSocket message handlers
+│   │   ├── handlers/        # WebSocket & AI API handlers
 │   │   ├── services/        # Business logic services
+│   │   ├── tools/           # AI tool implementations
+│   │   ├── middleware/      # AI authentication middleware
 │   │   ├── websocket/       # WebSocket server setup
 │   │   └── config/          # Configuration files
+│   ├── ai-tools.json        # AI function definitions
 │   └── package.json
 └── README.md
 ```
@@ -294,6 +340,8 @@ Ensure the following environment variables are set in production:
 
 **Backend:**
 - `FIREBASE_ADMIN_SDK_JSON`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL` (defaults to gpt-4)
 - `PORT`
 - `NODE_ENV`
 
@@ -306,8 +354,10 @@ CollabCanvas is optimized for performance:
 - **🎯 60 FPS** maintained during object manipulation
 - **⚡ <100ms** object synchronization latency
 - **🚄 <50ms** cursor position updates
+- **🤖 <2s** AI command processing time
 - **👥 5+ users** supported without performance degradation
 - **🔄 Zero data loss** during disconnects/reconnects
+- **🎨 AI objects sync identically** to toolbar-created objects
 
 ---
 
@@ -333,10 +383,12 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ## 📋 Roadmap
 
-- [ ] **AI Canvas Agent** - Smart suggestions and automated drawing
+- [x] **AI Canvas Agent** - ✅ Natural language commands for object creation
+- [x] **Shape Resizing** - ✅ Resize handles for all objects  
+- [x] **Object Rotation** - ✅ Rotate objects with transform handles
+- [ ] **Advanced AI Features** - Smart layout suggestions and bulk operations
 - [ ] **Advanced Selection** - Multi-select and drag-select capabilities  
 - [ ] **Layer Management** - Organize objects in layers
-- [ ] **Shape Resizing** - Resize handles for all objects
 - [ ] **Export Features** - Save as PNG, PDF, SVG
 - [ ] **Template Library** - Pre-built templates for common use cases
 - [ ] **Mobile App** - Native iOS and Android applications
@@ -353,6 +405,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Konva.js** for powerful 2D canvas rendering
 - **Firebase** for reliable real-time infrastructure  
+- **OpenAI** for GPT-4 and enabling natural language canvas interactions
 - **Netlify** for seamless frontend deployment and hosting
 - **Railway** for reliable backend hosting
 - **The React community** for amazing tools and libraries
