@@ -12,6 +12,9 @@ export { AuditLogService } from './auditLogService';
 // Canvas Management Services
 export { canvasStateService, CanvasStateService } from './canvasStateService';
 
+// Database Services
+export * from '../database';
+
 // AI Services (existing)
 export { openaiService, OpenAIService } from './openaiService';
 

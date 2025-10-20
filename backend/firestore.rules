@@ -1,0 +1,299 @@
+// Firestore Security Rules for CollabCanvas Multi-Canvas System
+// These rules enforce canvas-level permissions and access control
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ========================================
+    // Helper Functions
+    // ========================================
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Get current user ID
+    function currentUserId() {
+      return request.auth.uid;
+    }
+    
+    // Check if user owns a canvas
+    function isCanvasOwner(canvasId) {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/canvases/$(canvasId)).data.ownerId == currentUserId();
+    }
+    
+    // Get user's permission for a canvas
+    function getUserCanvasPermission(canvasId) {
+      return get(/databases/$(database)/documents/canvases/$(canvasId)/permissions/$(currentUserId())).data;
+    }
+    
+    // Check if user has permission for canvas
+    function hasCanvasPermission(canvasId) {
+      return isAuthenticated() && (
+        isCanvasOwner(canvasId) ||
+        exists(/databases/$(database)/documents/canvases/$(canvasId)/permissions/$(currentUserId()))
+      );
+    }
+    
+    // Check if user has specific role or higher for canvas
+    function hasCanvasRole(canvasId, minRole) {
+      let permission = getUserCanvasPermission(canvasId);
+      let roleHierarchy = {'viewer': 1, 'editor': 2, 'owner': 3};
+      
+      return isAuthenticated() && (
+        isCanvasOwner(canvasId) ||
+        (exists(/databases/$(database)/documents/canvases/$(canvasId)/permissions/$(currentUserId())) &&
+         permission.isActive == true &&
+         (permission.expiresAt == null || permission.expiresAt > request.time.toMillis()) &&
+         roleHierarchy[permission.role] >= roleHierarchy[minRole])
+      );
+    }
+    
+    // Check if user can edit canvas (editor role or higher)
+    function canEditCanvas(canvasId) {
+      return hasCanvasRole(canvasId, 'editor');
+    }
+    
+    // Check if user can manage canvas (owner role)
+    function canManageCanvas(canvasId) {
+      return hasCanvasRole(canvasId, 'owner');
+    }
+    
+    // Check if canvas is public
+    function isPublicCanvas(canvasId) {
+      let canvas = get(/databases/$(database)/documents/canvases/$(canvasId)).data;
+      return canvas.privacy == 'public';
+    }
+    
+    // Check if canvas allows public editing
+    function allowsPublicEdit(canvasId) {
+      let canvas = get(/databases/$(database)/documents/canvases/$(canvasId)).data;
+      return canvas.privacy == 'public' && 
+             canvas.settings != null && 
+             canvas.settings.allowPublicEdit == true;
+    }
+    
+    // Check if user can view canvas (has permission or public)
+    function canViewCanvas(canvasId) {
+      return hasCanvasPermission(canvasId) || isPublicCanvas(canvasId);
+    }
+    
+    // ========================================
+    // Users Collection
+    // ========================================
+    
+    match /users/{userId} {
+      // Users can read/write their own profile
+      allow read, write: if isAuthenticated() && currentUserId() == userId;
+    }
+    
+    // ========================================
+    // Canvases Collection
+    // ========================================
+    
+    match /canvases/{canvasId} {
+      // Anyone can create a canvas (they become the owner)
+      allow create: if isAuthenticated() && 
+                       request.resource.data.ownerId == currentUserId();
+      
+      // Canvas can be read if user has permission or canvas is public
+      allow read: if canViewCanvas(canvasId);
+      
+      // Canvas can be updated only by owner
+      allow update: if canManageCanvas(canvasId) &&
+                       // Prevent changing owner through update
+                       request.resource.data.ownerId == resource.data.ownerId;
+      
+      // Canvas can be deleted only by owner
+      allow delete: if canManageCanvas(canvasId);
+      
+      // ========================================
+      // Canvas Objects Subcollection
+      // ========================================
+      
+      match /objects/{objectId} {
+        // Objects can be read if user can view the canvas
+        allow read: if canViewCanvas(canvasId);
+        
+        // Objects can be created/updated/deleted if user can edit canvas or public edit is allowed
+        allow create, update, delete: if canEditCanvas(canvasId) || allowsPublicEdit(canvasId);
+      }
+      
+      // ========================================
+      // Canvas Permissions Subcollection
+      // ========================================
+      
+      match /permissions/{userId} {
+        // Users can read their own permission
+        allow read: if isAuthenticated() && (
+          currentUserId() == userId || 
+          canManageCanvas(canvasId)
+        );
+        
+        // Only canvas owner can manage permissions
+        allow create, update, delete: if canManageCanvas(canvasId);
+      }
+      
+      // ========================================
+      // Canvas Presence Subcollection
+      // ========================================
+      
+      match /presence/{userId} {
+        // Users can read presence if they can view canvas
+        allow read: if canViewCanvas(canvasId);
+        
+        // Users can write their own presence if they have canvas permission
+        allow write: if isAuthenticated() && 
+                        currentUserId() == userId && 
+                        hasCanvasPermission(canvasId);
+      }
+      
+      // ========================================
+      // Canvas Activity Subcollection
+      // ========================================
+      
+      match /activity/{activityId} {
+        // Activity can be read if user can view canvas
+        allow read: if canViewCanvas(canvasId);
+        
+        // Activity is created by system/cloud functions only
+        // Users cannot directly write activity logs
+        allow write: if false;
+      }
+      
+      // ========================================
+      // Canvas Comments Subcollection (Future)
+      // ========================================
+      
+      match /comments/{commentId} {
+        // Comments can be read if user can view canvas
+        allow read: if canViewCanvas(canvasId);
+        
+        // Comments can be created if user has canvas permission
+        allow create: if hasCanvasPermission(canvasId) &&
+                         request.resource.data.userId == currentUserId();
+        
+        // Users can update/delete their own comments
+        allow update, delete: if isAuthenticated() && (
+          resource.data.userId == currentUserId() ||
+          canManageCanvas(canvasId)
+        );
+      }
+    }
+    
+    // ========================================
+    // Invitations Collection
+    // ========================================
+    
+    match /invitations/{invitationId} {
+      // Invitations can be read by inviter or invitee (by email)
+      allow read: if isAuthenticated() && (
+        resource.data.inviterUserId == currentUserId() ||
+        resource.data.inviteeEmail == request.auth.token.email
+      );
+      
+      // Invitations can be created by canvas owners
+      allow create: if isAuthenticated() && 
+                       canManageCanvas(request.resource.data.canvasId) &&
+                       request.resource.data.inviterUserId == currentUserId();
+      
+      // Invitations can be updated by inviter (to cancel) or invitee (to respond)
+      allow update: if isAuthenticated() && (
+        (resource.data.inviterUserId == currentUserId() && 
+         request.resource.data.status == 'cancelled') ||
+        (resource.data.inviteeEmail == request.auth.token.email &&
+         request.resource.data.status in ['accepted', 'declined'])
+      );
+      
+      // Invitations can be deleted by inviter only
+      allow delete: if isAuthenticated() && 
+                       resource.data.inviterUserId == currentUserId();
+    }
+    
+    // ========================================
+    // Shareable Links Collection
+    // ========================================
+    
+    match /shareable_links/{linkId} {
+      // Links can be read by creator or anyone with the link ID (for access)
+      allow read: if resource.data.createdBy == currentUserId() ||
+                     (resource.data.isActive == true && 
+                      (resource.data.expiresAt == null || resource.data.expiresAt > request.time.toMillis()));
+      
+      // Links can be created by canvas owners
+      allow create: if isAuthenticated() && 
+                       canManageCanvas(request.resource.data.canvasId) &&
+                       request.resource.data.createdBy == currentUserId();
+      
+      // Links can be updated by creator
+      allow update: if isAuthenticated() && 
+                       resource.data.createdBy == currentUserId();
+      
+      // Links can be deleted by creator
+      allow delete: if isAuthenticated() && 
+                       resource.data.createdBy == currentUserId();
+    }
+    
+    // ========================================
+    // Audit Logs Collection
+    // ========================================
+    
+    match /audit_logs/{logId} {
+      // Audit logs can only be read by system/admin
+      // Regular users cannot access audit logs
+      allow read: if false;
+      
+      // Audit logs can only be written by system/cloud functions
+      allow write: if false;
+    }
+    
+    // ========================================
+    // Global Query Rules
+    // ========================================
+    
+    // Allow users to query their own canvases
+    match /canvases {
+      allow list: if isAuthenticated() && (
+        // User is querying their own canvases
+        request.query.where('ownerId', '==', currentUserId()) ||
+        // Or querying public canvases
+        request.query.where('privacy', '==', 'public')
+      );
+    }
+    
+    // Allow users to query their invitations
+    match /invitations {
+      allow list: if isAuthenticated() && (
+        request.query.where('inviterUserId', '==', currentUserId()) ||
+        request.query.where('inviteeEmail', '==', request.auth.token.email)
+      );
+    }
+    
+    // Allow users to query their shareable links
+    match /shareable_links {
+      allow list: if isAuthenticated() && 
+                     request.query.where('createdBy', '==', currentUserId());
+    }
+    
+    // ========================================
+    // Rate Limiting and Abuse Prevention
+    // ========================================
+    
+    // Prevent excessive document creation
+    match /{document=**} {
+      allow create: if request.time > resource.createTime + duration.value(1, 's');
+    }
+    
+    // ========================================
+    // Development/Testing Rules
+    // ========================================
+    
+    // Allow full access in development (comment out for production)
+    // match /{document=**} {
+    //   allow read, write: if true;
+    // }
+  }
+}

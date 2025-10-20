@@ -13,7 +13,12 @@
     "watch": "tsc --watch",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "setup:database": "ts-node src/scripts/setupDatabase.ts",
+    "migrate": "ts-node src/scripts/setupDatabase.ts migrate",
+    "db:init": "ts-node src/scripts/setupDatabase.ts init",
+    "db:validate": "ts-node src/scripts/setupDatabase.ts validate",
+    "db:indexes": "ts-node src/scripts/setupDatabase.ts indexes"
   },
   "dependencies": {
     "@types/semver": "^7.7.1",
@@ -30,7 +35,9 @@
     "bytes": "^3.1.2",
     "call-bind-apply-helpers": "^1.0.2",
     "call-bound": "^1.0.4",
+    "canvas": "^2.11.2",
     "chokidar": "^3.6.0",
+    "commander": "^9.5.0",
     "concat-map": "^0.0.1",
     "content-disposition": "^1.0.0",
     "content-type": "^1.0.5",
