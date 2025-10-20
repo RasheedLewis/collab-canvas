@@ -7,6 +7,8 @@
 // Canvas Management Controllers
 export * from './canvasController';
 export * from './canvasObjectController';
+export * from './canvasDiscoveryController';
+export * from './permissionController';
 
 // Auth Controllers (existing)
 export * from '../handlers/authHandler';

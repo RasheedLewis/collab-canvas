@@ -15,6 +15,10 @@ export { CanvasDiscoveryService } from './canvasDiscoveryService';
 export { ThumbnailService } from './thumbnailService';
 export { CanvasTrackingService } from './canvasTrackingService';
 
+// Communication Services
+export { EmailNotificationService } from './emailNotificationService';
+export { ShareableLinkService } from './shareableLinkService';
+
 // Database Services
 export * from '../database';
 

@@ -632,6 +632,430 @@ GET /api/discover/categories
 
 ---
 
+## Permission Management
+
+### Get Canvas Permissions
+
+Get all permissions for a canvas.
+
+```http
+GET /api/permissions/{canvasId}
+```
+
+**Requires:** Manage permission (owner only)
+
+**Response:**
+```json
+{
+  "success": true,
+  "permissions": [
+    {
+      "id": "permission-uuid",
+      "canvasId": "canvas-id",
+      "userId": "user-id",
+      "role": "editor",
+      "grantedBy": "owner-id",
+      "grantedAt": 1640995200000,
+      "expiresAt": null
+    }
+  ],
+  "totalCount": 3
+}
+```
+
+### Invite Collaborator
+
+Invite a user to collaborate on the canvas via email.
+
+```http
+POST /api/permissions/{canvasId}/invite
+```
+
+**Requires:** Manage permission (owner only)
+
+**Request Body:**
+```json
+{
+  "email": "collaborator@example.com",
+  "role": "editor",
+  "message": "Let's work on this design together!",
+  "expiresAt": 1640995200000
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "invitation": {
+    "id": "invitation-uuid",
+    "canvasId": "canvas-id",
+    "inviterUserId": "owner-id",
+    "inviteeEmail": "collaborator@example.com",
+    "role": "editor",
+    "status": "pending",
+    "createdAt": 1640995200000,
+    "expiresAt": 1640995200000,
+    "message": "Let's work on this design together!"
+  },
+  "message": "Invitation sent to collaborator@example.com"
+}
+```
+
+### Update Permission
+
+Update a user's role or permissions on a canvas.
+
+```http
+PATCH /api/permissions/{canvasId}/{permissionId}
+```
+
+**Requires:** Manage permission (owner only)
+
+**Request Body:**
+```json
+{
+  "role": "viewer",
+  "expiresAt": 1640995200000
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "permission": {
+    "id": "permission-uuid",
+    "canvasId": "canvas-id",
+    "userId": "user-id",
+    "role": "viewer",
+    "grantedBy": "owner-id",
+    "grantedAt": 1640995200000,
+    "expiresAt": 1640995200000
+  }
+}
+```
+
+### Remove Permission
+
+Remove a user's access from a canvas.
+
+```http
+DELETE /api/permissions/{canvasId}/{permissionId}
+```
+
+**Requires:** Manage permission (owner only)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Permission removed successfully"
+}
+```
+
+### Toggle Canvas Privacy
+
+Change canvas privacy settings.
+
+```http
+PATCH /api/permissions/{canvasId}/privacy
+```
+
+**Requires:** Owner permission
+
+**Request Body:**
+```json
+{
+  "privacy": "public"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "canvas": { ... },
+  "message": "Canvas privacy updated to public"
+}
+```
+
+### Transfer Ownership
+
+Transfer canvas ownership to another user.
+
+```http
+POST /api/permissions/{canvasId}/transfer-ownership
+```
+
+**Requires:** Owner permission
+
+**Request Body:**
+```json
+{
+  "newOwnerId": "new-owner-user-id"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Canvas ownership transferred successfully"
+}
+```
+
+### Create Shareable Link
+
+Create a shareable link for the canvas.
+
+```http
+POST /api/permissions/{canvasId}/links
+```
+
+**Requires:** Manage permission (owner only)
+
+**Request Body:**
+```json
+{
+  "role": "viewer",
+  "expiresAt": 1640995200000,
+  "maxAccess": 100
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "link": {
+    "id": "link-uuid",
+    "canvasId": "canvas-id",
+    "createdBy": "owner-id",
+    "role": "viewer",
+    "isActive": true,
+    "expiresAt": 1640995200000,
+    "createdAt": 1640995200000,
+    "accessCount": 0,
+    "maxAccess": 100
+  },
+  "url": "https://collabcanvas.com/canvas/shared/link-uuid"
+}
+```
+
+### Get Shareable Links
+
+Get all shareable links for a canvas.
+
+```http
+GET /api/permissions/{canvasId}/links
+```
+
+**Requires:** Manage permission (owner only)
+
+**Response:**
+```json
+{
+  "success": true,
+  "links": [
+    {
+      "id": "link-uuid",
+      "canvasId": "canvas-id",
+      "createdBy": "owner-id",
+      "role": "viewer",
+      "isActive": true,
+      "expiresAt": 1640995200000,
+      "createdAt": 1640995200000,
+      "accessCount": 15,
+      "maxAccess": 100
+    }
+  ],
+  "totalCount": 1
+}
+```
+
+### Deactivate Shareable Link
+
+Deactivate a shareable link to prevent further access.
+
+```http
+DELETE /api/permissions/{canvasId}/links/{linkId}
+```
+
+**Requires:** Manage permission (owner only)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Shareable link deactivated successfully"
+}
+```
+
+### Access Canvas via Shareable Link
+
+Access a canvas using a shareable link (public endpoint).
+
+```http
+GET /api/permissions/shared/{linkId}
+```
+
+**No authentication required**
+
+**Response:**
+```json
+{
+  "success": true,
+  "canvasId": "canvas-id",
+  "role": "viewer",
+  "canvas": {
+    "id": "canvas-id",
+    "name": "Shared Design",
+    "description": "A publicly shared canvas",
+    "privacy": "public"
+  },
+  "message": "Access granted with viewer permissions"
+}
+```
+
+### Get Shareable Link Analytics
+
+Get usage analytics for a shareable link.
+
+```http
+GET /api/permissions/shared/{linkId}/analytics
+```
+
+**Requires:** Manage permission for the canvas
+
+**Response:**
+```json
+{
+  "success": true,
+  "linkId": "link-uuid",
+  "analytics": {
+    "totalAccesses": 45,
+    "uniqueAccessors": 23,
+    "recentAccesses": [
+      {
+        "linkId": "link-uuid",
+        "accessorId": "user-id",
+        "accessorEmail": "user@example.com",
+        "ipAddress": "192.168.1.1",
+        "userAgent": "Mozilla/5.0...",
+        "timestamp": 1640995200000
+      }
+    ],
+    "topReferrers": [
+      {
+        "userAgent": "Chrome",
+        "count": 15
+      }
+    ]
+  }
+}
+```
+
+### Get Permission Audit Log
+
+Get audit log of permission changes for a canvas.
+
+```http
+GET /api/permissions/{canvasId}/audit-log
+```
+
+**Requires:** Manage permission (owner only)
+
+**Query Parameters:**
+- `limit` (number, default: 50) - Number of entries
+- `cursor` (string) - Pagination cursor
+
+**Response:**
+```json
+{
+  "success": true,
+  "auditLog": [
+    {
+      "id": "audit-uuid",
+      "eventType": "permission_granted",
+      "canvasId": "canvas-id",
+      "userId": "owner-id",
+      "targetUserId": "collaborator-id",
+      "details": {
+        "description": "Invited user@example.com as editor",
+        "metadata": {
+          "inviteeEmail": "user@example.com",
+          "role": "editor"
+        },
+        "riskLevel": "low"
+      },
+      "timestamp": 1640995200000,
+      "ipAddress": "192.168.1.1",
+      "userAgent": "Mozilla/5.0..."
+    }
+  ],
+  "totalCount": 5
+}
+```
+
+### Get User Invitations
+
+Get pending invitations for the authenticated user.
+
+```http
+GET /api/permissions/invitations
+```
+
+**Requires:** Authentication
+
+**Response:**
+```json
+{
+  "success": true,
+  "invitations": [
+    {
+      "id": "invitation-uuid",
+      "canvasId": "canvas-id",
+      "inviterUserId": "owner-id",
+      "inviteeEmail": "user@example.com",
+      "role": "editor",
+      "status": "pending",
+      "createdAt": 1640995200000,
+      "expiresAt": 1640995200000,
+      "message": "Join my project!"
+    }
+  ]
+}
+```
+
+### Accept/Decline Invitation
+
+Accept or decline a canvas invitation.
+
+```http
+POST /api/permissions/invitations/{invitationId}/accept
+```
+
+**Requires:** Authentication
+
+**Request Body:**
+```json
+{
+  "accept": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Invitation accepted",
+  "invitationId": "invitation-uuid"
+}
+```
+
+---
+
 ## Canvas Objects
 
 ### Get Canvas Objects
