@@ -1,62 +1,47 @@
-// Re-export types from shared types for backward compatibility
-export type {
-    BaseCanvasObject,
-    RectangleObject,
-    CircleObject,
-    TextObject,
-    CanvasObject,
-    Canvas,
-    CanvasPermission,
-    PermissionRole,
-    CanvasPrivacy,
-    User
-} from '../../../shared/types';
+export interface BaseCanvasObject {
+    id: string;
+    x: number;
+    y: number;
+    type: 'rectangle' | 'circle' | 'text';
+    color: string;
+    rotation?: number; // Rotation in degrees, defaults to 0
+    createdAt: number;
+    updatedAt: number;
+    userId?: string;
+}
 
-// Frontend-specific canvas UI state
-export interface CanvasUIState {
-    currentCanvasId: string | null;
+export interface RectangleObject extends BaseCanvasObject {
+    type: 'rectangle';
+    width: number;
+    height: number;
+}
+
+export interface CircleObject extends BaseCanvasObject {
+    type: 'circle';
+    radius: number;
+}
+
+export interface TextObject extends BaseCanvasObject {
+    type: 'text';
+    text: string;
+    fontSize: number;
+    fontFamily?: string;
+    fontStyle?: string;
+}
+
+export type CanvasObject = RectangleObject | CircleObject | TextObject;
+
+export interface CanvasState {
     objects: CanvasObject[];
     selectedObjectId: string | null;
     tool: 'select' | 'rectangle' | 'circle' | 'text';
     activeColor: string;
-    isLoading: boolean;
-    error: string | null;
 }
 
 export interface ViewportState {
     x: number;
     y: number;
     scale: number;
-}
-
-// Multi-canvas management state
-export interface MultiCanvasState {
-    canvases: Canvas[];
-    currentCanvas: Canvas | null;
-    permissions: Record<string, CanvasPermission>; // canvasId -> permission
-    loading: boolean;
-    error: string | null;
-}
-
-// Dashboard state for canvas management
-export interface DashboardState {
-    canvases: Canvas[];
-    filteredCanvases: Canvas[];
-    searchQuery: string;
-    filters: {
-        privacy?: CanvasPrivacy;
-        ownedByMe?: boolean;
-        sharedWithMe?: boolean;
-        folder?: string;
-        tags?: string[];
-        isFavorite?: boolean;
-        isArchived?: boolean;
-    };
-    sortBy: 'name' | 'createdAt' | 'updatedAt' | 'lastAccessedAt';
-    sortDirection: 'asc' | 'desc';
-    view: 'grid' | 'list';
-    loading: boolean;
-    error: string | null;
 }
 
 // Predefined color palette

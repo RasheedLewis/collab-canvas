@@ -5,10 +5,6 @@ import dotenv from 'dotenv';
 import { verifyAuthToken, getCurrentUser } from './handlers/authHandler';
 import { WebSocketConnectionManager } from './websocket/connectionHandler';
 import { aiRoutes } from './routes/aiRoutes';
-import { canvasRoutes } from './routes/canvasRoutes';
-import { canvasObjectRoutes } from './routes/canvasObjectRoutes';
-import { canvasDiscoveryRoutes } from './routes/canvasDiscoveryRoutes';
-import { permissionRoutes } from './routes/permissionRoutes';
 import { ToolRegistry } from './tools/toolRegistry';
 import { CanvasPersistenceService } from './services/persistenceService';
 import { initializeCanvasToolServices, CANVAS_TOOL_HANDLERS } from './tools/canvasToolHandlers';
@@ -133,18 +129,6 @@ app.get('/api/ai/status', (_req, res) => {
 
 // AI routes
 app.use('/api/ai', aiRoutes);
-
-// Canvas routes
-app.use('/api/canvas', canvasRoutes);
-
-// Canvas object routes (nested under canvas routes)
-app.use('/api/canvas', canvasObjectRoutes);
-
-// Canvas discovery routes
-app.use('/api/discover', canvasDiscoveryRoutes);
-
-// Permission management routes
-app.use('/api/permissions', permissionRoutes);
 
 // Additional WebSocket status routes
 app.get('/api/websocket/status', (_req, res) => {
