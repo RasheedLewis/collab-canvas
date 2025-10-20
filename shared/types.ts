@@ -291,6 +291,108 @@ export interface PermissionError extends APIError {
 }
 
 // ========================================
+// Permission System Types
+// ========================================
+
+export type CanvasAction = 'view' | 'edit' | 'delete' | 'share' | 'manage' | 'transfer_ownership';
+
+export interface PermissionValidationResult {
+    hasPermission: boolean;
+    userRole?: PermissionRole;
+    requiredRole?: PermissionRole;
+    isExpired?: boolean;
+    error?: string;
+}
+
+export interface UserCanvasPermissionSummary {
+    role: PermissionRole;
+    canView: boolean;
+    canEdit: boolean;
+    canShare: boolean;
+    canManage: boolean;
+    canDelete: boolean;
+    canTransferOwnership: boolean;
+    isExpired: boolean;
+    expiresAt?: number;
+}
+
+export interface BatchPermissionResult {
+    success: boolean;
+    results: Array<{
+        userId: string;
+        success: boolean;
+        permission?: CanvasPermission;
+        error?: string;
+    }>;
+    summary: {
+        total: number;
+        successful: number;
+        failed: number;
+    };
+}
+
+// ========================================  
+// Audit and Logging Types
+// ========================================
+
+export type AuditEventType =
+    | 'canvas_created'
+    | 'canvas_updated'
+    | 'canvas_deleted'
+    | 'canvas_archived'
+    | 'canvas_restored'
+    | 'canvas_duplicated'
+    | 'permission_granted'
+    | 'permission_updated'
+    | 'permission_revoked'
+    | 'ownership_transferred'
+    | 'object_created'
+    | 'object_updated'
+    | 'object_deleted'
+    | 'canvas_accessed'
+    | 'unauthorized_access_attempt'
+    | 'suspicious_activity';
+
+export interface AuditLogEntry {
+    id: string;
+    eventType: AuditEventType;
+    canvasId?: string;
+    userId: string;
+    targetUserId?: string;
+    objectId?: string;
+    details: {
+        description: string;
+        metadata?: Record<string, any>;
+        riskLevel?: 'low' | 'medium' | 'high';
+    };
+    timestamp: number;
+    ipAddress?: string;
+    userAgent?: string;
+}
+
+export interface CanvasAccessLog {
+    canvasId: string;
+    userId: string;
+    accessType: 'view' | 'edit' | 'share' | 'delete';
+    timestamp: number;
+    ipAddress?: string;
+    userAgent?: string;
+    duration?: number;
+}
+
+export interface PermissionChangeLog {
+    permissionId: string;
+    canvasId: string;
+    targetUserId: string;
+    changedBy: string;
+    action: 'granted' | 'updated' | 'revoked';
+    oldRole?: PermissionRole;
+    newRole?: PermissionRole;
+    reason?: string;
+    timestamp: number;
+}
+
+// ========================================
 // Utility Types
 // ========================================
 
