@@ -96,7 +96,25 @@ export const SUPPORTED_MESSAGE_TYPES = [
     'text_changed',
     'canvas_state_requested',
     'canvas_state_sync',
-    'canvas_cleared'
+    'canvas_cleared',
+    // Canvas namespace management messages
+    'join_canvas_room',
+    'leave_canvas_room',
+    'canvas_room_joined',
+    'canvas_room_left',
+    'canvas_user_joined',
+    'canvas_user_left',
+    'canvas_presence_update',
+    'canvas_presence_updated',
+    'canvas_permission_changed',
+    'canvas_permission_updated',
+    'canvas_permission_revoked',
+    'canvas_member_role_updated',
+    'cross_canvas_notification',
+    // Canvas switching and multi-canvas support
+    'switch_canvas',
+    'canvas_list_update',
+    'canvas_access_denied'
 ] as const;
 
 export type MessageType = typeof SUPPORTED_MESSAGE_TYPES[number];
@@ -265,6 +283,50 @@ export const ClientMessageSchemas = {
         type: z.literal('canvas_cleared'),
         payload: z.object({
             roomId: z.string(),
+        }),
+    }),
+
+    // Canvas namespace management messages (client-to-server)
+    join_canvas_room: BaseMessageSchema.extend({
+        type: z.literal('join_canvas_room'),
+        payload: z.object({
+            canvasId: z.string().min(1, 'Canvas ID is required'),
+            userInfo: z.object({
+                displayName: z.string().min(1, 'Display name is required'),
+                avatarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+            }),
+        }),
+    }),
+
+    leave_canvas_room: BaseMessageSchema.extend({
+        type: z.literal('leave_canvas_room'),
+        payload: z.object({
+            canvasId: z.string().min(1, 'Canvas ID is required'),
+        }),
+    }),
+
+    canvas_presence_update: BaseMessageSchema.extend({
+        type: z.literal('canvas_presence_update'),
+        payload: z.object({
+            canvasId: z.string().min(1, 'Canvas ID is required'),
+            cursor: z.object({
+                x: z.number(),
+                y: z.number(),
+                visible: z.boolean(),
+            }).optional(),
+            status: z.enum(['active', 'idle', 'away']).optional(),
+        }),
+    }),
+
+    switch_canvas: BaseMessageSchema.extend({
+        type: z.literal('switch_canvas'),
+        payload: z.object({
+            fromCanvasId: z.string().optional(),
+            toCanvasId: z.string().min(1, 'Target canvas ID is required'),
+            userInfo: z.object({
+                displayName: z.string().min(1, 'Display name is required'),
+                avatarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+            }).optional(),
         }),
     }),
 
@@ -499,6 +561,157 @@ export const ServerMessageSchemas = {
         payload: z.object({
             roomId: z.string(),
             userId: z.string(), // User who cleared the canvas
+        }),
+    }),
+
+    // Canvas namespace management messages (server-to-client)
+    canvas_room_joined: BaseMessageSchema.extend({
+        type: z.literal('canvas_room_joined'),
+        payload: z.object({
+            canvasId: z.string(),
+            role: z.enum(['owner', 'editor', 'viewer']),
+            canvasInfo: z.object({
+                name: z.string(),
+                ownerId: z.string(),
+                privacy: z.enum(['private', 'public', 'unlisted']),
+            }).optional(),
+            members: z.array(z.object({
+                userId: z.string(),
+                displayName: z.string(),
+                avatarColor: z.string().optional(),
+                role: z.enum(['owner', 'editor', 'viewer']),
+                status: z.enum(['active', 'idle', 'away']),
+                cursor: z.object({
+                    x: z.number(),
+                    y: z.number(),
+                    visible: z.boolean(),
+                }).optional(),
+                joinedAt: z.number(),
+            })),
+            memberCount: z.number(),
+        }),
+    }),
+
+    canvas_room_left: BaseMessageSchema.extend({
+        type: z.literal('canvas_room_left'),
+        payload: z.object({
+            canvasId: z.string(),
+        }),
+    }),
+
+    canvas_user_joined: BaseMessageSchema.extend({
+        type: z.literal('canvas_user_joined'),
+        payload: z.object({
+            canvasId: z.string(),
+            member: z.object({
+                clientId: z.string(),
+                userId: z.string(),
+                displayName: z.string(),
+                avatarColor: z.string().optional(),
+                role: z.enum(['owner', 'editor', 'viewer']),
+                joinedAt: z.number(),
+            }),
+            memberCount: z.number(),
+        }),
+    }),
+
+    canvas_user_left: BaseMessageSchema.extend({
+        type: z.literal('canvas_user_left'),
+        payload: z.object({
+            canvasId: z.string(),
+            userId: z.string(),
+            clientId: z.string(),
+            memberCount: z.number(),
+        }),
+    }),
+
+    canvas_presence_updated: BaseMessageSchema.extend({
+        type: z.literal('canvas_presence_updated'),
+        payload: z.object({
+            canvasId: z.string(),
+            userId: z.string(),
+            clientId: z.string(),
+            cursor: z.object({
+                x: z.number(),
+                y: z.number(),
+                visible: z.boolean(),
+            }).optional(),
+            status: z.enum(['active', 'idle', 'away']).optional(),
+        }),
+    }),
+
+    canvas_permission_updated: BaseMessageSchema.extend({
+        type: z.literal('canvas_permission_updated'),
+        payload: z.object({
+            canvasId: z.string(),
+            oldRole: z.enum(['owner', 'editor', 'viewer']).optional(),
+            newRole: z.enum(['owner', 'editor', 'viewer']),
+            message: z.string(),
+        }),
+    }),
+
+    canvas_permission_revoked: BaseMessageSchema.extend({
+        type: z.literal('canvas_permission_revoked'),
+        payload: z.object({
+            canvasId: z.string(),
+            reason: z.string(),
+            redirectTo: z.string().optional(),
+        }),
+    }),
+
+    canvas_member_role_updated: BaseMessageSchema.extend({
+        type: z.literal('canvas_member_role_updated'),
+        payload: z.object({
+            canvasId: z.string(),
+            userId: z.string(),
+            oldRole: z.enum(['owner', 'editor', 'viewer']).optional(),
+            newRole: z.enum(['owner', 'editor', 'viewer']),
+        }),
+    }),
+
+    canvas_permission_changed: BaseMessageSchema.extend({
+        type: z.literal('canvas_permission_changed'),
+        payload: z.object({
+            type: z.enum(['permission_granted', 'permission_updated', 'permission_revoked', 'ownership_transferred']),
+            canvasId: z.string(),
+            targetUserId: z.string(),
+            changedBy: z.string(),
+            oldRole: z.enum(['owner', 'editor', 'viewer']).optional(),
+            newRole: z.enum(['owner', 'editor', 'viewer']).optional(),
+            timestamp: z.number(),
+        }),
+    }),
+
+    cross_canvas_notification: BaseMessageSchema.extend({
+        type: z.literal('cross_canvas_notification'),
+        payload: z.object({
+            notificationType: z.enum(['canvas_shared', 'canvas_invitation', 'canvas_deleted', 'canvas_privacy_changed']),
+            sourceCanvasId: z.string(),
+            userId: z.string(),
+            data: z.record(z.string(), z.any()),
+            timestamp: z.number(),
+        }),
+    }),
+
+    canvas_access_denied: BaseMessageSchema.extend({
+        type: z.literal('canvas_access_denied'),
+        payload: z.object({
+            canvasId: z.string(),
+            reason: z.string(),
+            code: z.string().optional(),
+        }),
+    }),
+
+    canvas_list_update: BaseMessageSchema.extend({
+        type: z.literal('canvas_list_update'),
+        payload: z.object({
+            type: z.enum(['canvas_added', 'canvas_removed', 'canvas_updated', 'permission_changed']),
+            canvasId: z.string(),
+            canvasInfo: z.object({
+                name: z.string(),
+                privacy: z.enum(['private', 'public', 'unlisted']),
+                role: z.enum(['owner', 'editor', 'viewer']).optional(),
+            }).optional(),
         }),
     }),
 };

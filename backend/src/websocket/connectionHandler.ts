@@ -11,6 +11,7 @@ import {
 } from './messageProtocol';
 import SessionManager, { type ClientSession } from './sessionManager';
 import { canvasPersistence } from '../services/persistenceService';
+import { CanvasNamespaceManager } from './canvasNamespaceManager';
 
 export interface Client {
     id: string;
@@ -44,12 +45,21 @@ export class WebSocketConnectionManager {
     private messageRouter: MessageRouter;
     private rateLimiter: RateLimiter;
     private sessionManager: SessionManager;
+    private canvasNamespaceManager: CanvasNamespaceManager;
 
     constructor(server: Server) {
         this.wss = new WebSocketServer({ server });
         this.messageRouter = new MessageRouter();
         this.rateLimiter = new RateLimiter(300, 60000); // 300 messages per minute (5 per second) for cursor updates
         this.sessionManager = new SessionManager();
+        this.canvasNamespaceManager = CanvasNamespaceManager.getInstance();
+
+        // Initialize canvas namespace manager callbacks
+        this.canvasNamespaceManager.initializeCallbacks(
+            this.sendToClient.bind(this),
+            this.broadcastToRoom.bind(this)
+        );
+
         this.initialize();
         this.setupMessageHandlers();
         this.startHeartbeat();
@@ -88,6 +98,12 @@ export class WebSocketConnectionManager {
         this.messageRouter.registerHandler('text_changed', this.handleTextChanged.bind(this));
         this.messageRouter.registerHandler('canvas_state_requested', this.handleCanvasStateRequested.bind(this));
         this.messageRouter.registerHandler('canvas_cleared', this.handleCanvasCleared.bind(this));
+
+        // Canvas namespace management handlers
+        this.messageRouter.registerHandler('join_canvas_room', this.handleJoinCanvasRoom.bind(this));
+        this.messageRouter.registerHandler('leave_canvas_room', this.handleLeaveCanvasRoom.bind(this));
+        this.messageRouter.registerHandler('canvas_presence_update', this.handleCanvasPresenceUpdate.bind(this));
+        this.messageRouter.registerHandler('switch_canvas', this.handleSwitchCanvas.bind(this));
 
         console.log(`✅ Registered handlers for: ${this.messageRouter.getRegisteredTypes().join(', ')}`);
     }
@@ -925,6 +941,189 @@ export class WebSocketConnectionManager {
         }).filter(member => member !== undefined);
     }
 
+    // ========================================
+    // Canvas Namespace Management Handlers
+    // ========================================
+
+    /**
+     * Handle joining a canvas-specific room
+     */
+    private async handleJoinCanvasRoom(clientId: string, message: any, _context: any): Promise<void> {
+        const { canvasId, userInfo } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required to join canvas room');
+            return;
+        }
+
+        if (!canvasId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, 'Canvas ID is required');
+            return;
+        }
+
+        if (!userInfo?.displayName) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, 'Display name is required');
+            return;
+        }
+
+        try {
+            const result = await this.canvasNamespaceManager.joinCanvasRoom(
+                clientId,
+                client.user.uid,
+                canvasId,
+                {
+                    displayName: userInfo.displayName,
+                    avatarColor: userInfo.avatarColor
+                }
+            );
+
+            if (!result.success) {
+                this.sendErrorMessage(clientId, ERROR_CODES.ROOM_ACCESS_DENIED, result.error || 'Failed to join canvas room');
+                return;
+            }
+
+            console.log(`🎨 Client ${clientId} (${client.user.uid}) joined canvas room ${canvasId} as ${result.role}`);
+
+        } catch (error) {
+            console.error('Error handling join canvas room:', error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Internal server error');
+        }
+    }
+
+    /**
+     * Handle leaving a canvas room
+     */
+    private async handleLeaveCanvasRoom(clientId: string, message: any, _context: any): Promise<void> {
+        const { canvasId } = message.payload || {};
+        
+        if (!canvasId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, 'Canvas ID is required');
+            return;
+        }
+
+        try {
+            await this.canvasNamespaceManager.leaveCanvasRoom(clientId, canvasId);
+
+            // Send confirmation to client
+            this.sendToClient(clientId, {
+                type: 'canvas_room_left',
+                payload: { canvasId },
+                timestamp: Date.now()
+            });
+
+            console.log(`🚪 Client ${clientId} left canvas room ${canvasId}`);
+
+        } catch (error) {
+            console.error('Error handling leave canvas room:', error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Internal server error');
+        }
+    }
+
+    /**
+     * Handle canvas presence updates (cursor, status, etc.)
+     */
+    private handleCanvasPresenceUpdate(clientId: string, message: any, _context: any): void {
+        const { canvasId, cursor, status } = message.payload || {};
+
+        if (!canvasId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, 'Canvas ID is required');
+            return;
+        }
+
+        try {
+            this.canvasNamespaceManager.updateUserPresence(clientId, canvasId, {
+                cursor,
+                status
+            });
+
+        } catch (error) {
+            console.error('Error handling canvas presence update:', error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Internal server error');
+        }
+    }
+
+    /**
+     * Handle switching between canvases
+     */
+    private async handleSwitchCanvas(clientId: string, message: any, _context: any): Promise<void> {
+        const { fromCanvasId, toCanvasId, userInfo } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required to switch canvas');
+            return;
+        }
+
+        if (!toCanvasId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, 'Target canvas ID is required');
+            return;
+        }
+
+        try {
+            // Leave current canvas if specified
+            if (fromCanvasId) {
+                await this.canvasNamespaceManager.leaveCanvasRoom(clientId, fromCanvasId);
+            } else {
+                // Leave all canvas rooms
+                await this.canvasNamespaceManager.leaveAllCanvasRooms(clientId);
+            }
+
+            // Join new canvas room
+            const result = await this.canvasNamespaceManager.joinCanvasRoom(
+                clientId,
+                client.user.uid,
+                toCanvasId,
+                {
+                    displayName: userInfo?.displayName || client.user.displayName || client.user.name || 'Anonymous',
+                    avatarColor: userInfo?.avatarColor || client.user.avatarColor
+                }
+            );
+
+            if (!result.success) {
+                this.sendErrorMessage(clientId, ERROR_CODES.ROOM_ACCESS_DENIED, result.error || 'Failed to switch to canvas');
+                return;
+            }
+
+            console.log(`🔄 Client ${clientId} switched from ${fromCanvasId || 'any'} to canvas ${toCanvasId}`);
+
+        } catch (error) {
+            console.error('Error handling canvas switch:', error);
+            this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Internal server error');
+        }
+    }
+
+    /**
+     * Handle client disconnect and cleanup
+     */
+    private async handleDisconnect(clientId: string, code: number, reason: string): Promise<void> {
+        const client = this.clients.get(clientId);
+        if (!client) return;
+
+        try {
+            // Leave all canvas rooms
+            await this.canvasNamespaceManager.leaveAllCanvasRooms(clientId);
+
+            // Leave traditional room if in one
+            if (client.roomId) {
+                this.leaveRoom(clientId, client.roomId);
+            }
+
+            // Remove client from tracking
+            this.clients.delete(clientId);
+
+            // Clean up session
+            this.sessionManager.invalidateSession(clientId);
+
+            console.log(`🧹 Cleaned up client ${clientId} (${reason})`);
+
+        } catch (error) {
+            console.error(`Error cleaning up client ${clientId}:`, error);
+            // Force cleanup even if canvas namespace cleanup fails
+            this.clients.delete(clientId);
+        }
+    }
+
     private startHeartbeat(): void {
         this.heartbeatInterval = setInterval(() => {
             console.log(`💓 Heartbeat check - ${this.clients.size} clients`);
@@ -1087,6 +1286,9 @@ export class WebSocketConnectionManager {
 
         // Shutdown session manager
         this.sessionManager.shutdown();
+
+        // Shutdown canvas namespace manager
+        this.canvasNamespaceManager.shutdown();
 
         // Shutdown persistence service (save all pending changes)
         try {

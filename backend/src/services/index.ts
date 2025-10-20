@@ -15,6 +15,9 @@ export { CanvasDiscoveryService } from './canvasDiscoveryService';
 export { ThumbnailService } from './thumbnailService';
 export { CanvasTrackingService } from './canvasTrackingService';
 
+// WebSocket and Real-time Services
+export { CanvasWebSocketService } from './canvasWebSocketService';
+
 // Communication Services
 export { EmailNotificationService } from './emailNotificationService';
 export { ShareableLinkService } from './shareableLinkService';
