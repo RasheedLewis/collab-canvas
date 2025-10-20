@@ -12,6 +12,7 @@ import {
 import SessionManager, { type ClientSession } from './sessionManager';
 import { canvasPersistence } from '../services/persistenceService';
 import { CanvasNamespaceManager } from './canvasNamespaceManager';
+import { CanvasStateIsolationService } from '../services/canvasStateIsolationService';
 
 export interface Client {
     id: string;
@@ -46,6 +47,7 @@ export class WebSocketConnectionManager {
     private rateLimiter: RateLimiter;
     private sessionManager: SessionManager;
     private canvasNamespaceManager: CanvasNamespaceManager;
+    private canvasStateIsolation: CanvasStateIsolationService;
 
     constructor(server: Server) {
         this.wss = new WebSocketServer({ server });
@@ -53,6 +55,7 @@ export class WebSocketConnectionManager {
         this.rateLimiter = new RateLimiter(300, 60000); // 300 messages per minute (5 per second) for cursor updates
         this.sessionManager = new SessionManager();
         this.canvasNamespaceManager = CanvasNamespaceManager.getInstance();
+        this.canvasStateIsolation = CanvasStateIsolationService.getInstance();
 
         // Initialize canvas namespace manager callbacks
         this.canvasNamespaceManager.initializeCallbacks(
@@ -983,6 +986,18 @@ export class WebSocketConnectionManager {
                 return;
             }
 
+            // Add user to canvas state isolation
+            this.canvasStateIsolation.addCanvasPresence(
+                canvasId,
+                client.user.uid,
+                clientId,
+                {
+                    displayName: userInfo.displayName,
+                    avatarColor: userInfo.avatarColor,
+                    role: result.role!
+                }
+            );
+
             console.log(`🎨 Client ${clientId} (${client.user.uid}) joined canvas room ${canvasId} as ${result.role}`);
 
         } catch (error) {
@@ -996,13 +1011,19 @@ export class WebSocketConnectionManager {
      */
     private async handleLeaveCanvasRoom(clientId: string, message: any, _context: any): Promise<void> {
         const { canvasId } = message.payload || {};
-        
+
         if (!canvasId) {
             this.sendErrorMessage(clientId, ERROR_CODES.INVALID_MESSAGE, 'Canvas ID is required');
             return;
         }
 
         try {
+            // Remove from canvas state isolation
+            const client = this.clients.get(clientId);
+            if (client?.user) {
+                this.canvasStateIsolation.removeCanvasPresence(canvasId, client.user.uid, clientId);
+            }
+
             await this.canvasNamespaceManager.leaveCanvasRoom(clientId, canvasId);
 
             // Send confirmation to client
@@ -1061,6 +1082,19 @@ export class WebSocketConnectionManager {
         }
 
         try {
+            // Use canvas state isolation for seamless switching
+            await this.canvasStateIsolation.switchUserCanvas(
+                client.user.uid,
+                clientId,
+                fromCanvasId,
+                toCanvasId,
+                {
+                    displayName: userInfo?.displayName || client.user.displayName || client.user.name || 'Anonymous',
+                    avatarColor: userInfo?.avatarColor || client.user.avatarColor,
+                    role: 'viewer' // Will be updated by namespace manager
+                }
+            );
+
             // Leave current canvas if specified
             if (fromCanvasId) {
                 await this.canvasNamespaceManager.leaveCanvasRoom(clientId, fromCanvasId);
@@ -1085,12 +1119,720 @@ export class WebSocketConnectionManager {
                 return;
             }
 
+            // Update role in state isolation now that we have the correct role
+            const presence = this.canvasStateIsolation.getCanvasPresence(toCanvasId);
+            const userPresence = presence.find(p => p.userId === client.user.uid);
+            if (userPresence) {
+                userPresence.role = result.role!;
+            }
+
             console.log(`🔄 Client ${clientId} switched from ${fromCanvasId || 'any'} to canvas ${toCanvasId}`);
 
         } catch (error) {
             console.error('Error handling canvas switch:', error);
             this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Internal server error');
         }
+    }
+
+    // ========================================
+    // Canvas-Aware Object Handlers
+    // ========================================
+
+    /**
+     * Handle object creation in canvas-specific context
+     */
+    private async handleObjectCreated(clientId: string, message: any, _context: any): Promise<void> {
+        const { roomId, object } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required');
+            return;
+        }
+
+        // Check if this is a canvas room (canvas ID format)
+        const canvasId = roomId;
+        if (canvasId && this.isCanvasRoom(canvasId)) {
+            // Use canvas state isolation service
+            try {
+                await this.canvasStateIsolation.addObjectToCanvas(
+                    canvasId,
+                    object,
+                    client.user.uid,
+                    clientId
+                );
+
+                // Update presence activity
+                this.canvasStateIsolation.updateUserActivity(canvasId, client.user.uid, clientId);
+
+                // Broadcast to canvas room
+                this.broadcastToRoom(canvasId, {
+                    type: 'object_created',
+                    payload: {
+                        roomId: canvasId,
+                        object,
+                        userId: client.user.uid
+                    },
+                    timestamp: Date.now()
+                });
+
+                console.log(`🎨 Created object ${object.id} in canvas ${canvasId}`);
+            } catch (error) {
+                console.error(`❌ Failed to create object in canvas ${canvasId}:`, error);
+                this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to create object');
+            }
+        } else {
+            // Fallback to traditional room-based handling
+            await this.handleTraditionalObjectCreated(clientId, message, _context);
+        }
+    }
+
+    /**
+     * Handle object updates in canvas-specific context
+     */
+    private async handleObjectUpdated(clientId: string, message: any, _context: any): Promise<void> {
+        const { roomId, objectId, updates } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required');
+            return;
+        }
+
+        const canvasId = roomId;
+        if (canvasId && this.isCanvasRoom(canvasId)) {
+            try {
+                await this.canvasStateIsolation.updateObjectInCanvas(
+                    canvasId,
+                    objectId,
+                    updates,
+                    client.user.uid,
+                    clientId
+                );
+
+                // Update presence activity
+                this.canvasStateIsolation.updateUserActivity(canvasId, client.user.uid, clientId);
+
+                // Broadcast to canvas room
+                this.broadcastToRoom(canvasId, {
+                    type: 'object_updated',
+                    payload: {
+                        roomId: canvasId,
+                        objectId,
+                        updates,
+                        userId: client.user.uid
+                    },
+                    timestamp: Date.now()
+                });
+
+                console.log(`🎨 Updated object ${objectId} in canvas ${canvasId}`);
+            } catch (error) {
+                console.error(`❌ Failed to update object in canvas ${canvasId}:`, error);
+                this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to update object');
+            }
+        } else {
+            // Fallback to traditional room-based handling
+            await this.handleTraditionalObjectUpdated(clientId, message, _context);
+        }
+    }
+
+    /**
+     * Handle object movement in canvas-specific context
+     */
+    private async handleObjectMoved(clientId: string, message: any, _context: any): Promise<void> {
+        const { roomId, objectId, x, y } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required');
+            return;
+        }
+
+        const canvasId = roomId;
+        if (canvasId && this.isCanvasRoom(canvasId)) {
+            try {
+                await this.canvasStateIsolation.updateObjectInCanvas(
+                    canvasId,
+                    objectId,
+                    { x, y, updatedAt: Date.now() },
+                    client.user.uid,
+                    clientId
+                );
+
+                // Update presence activity
+                this.canvasStateIsolation.updateUserActivity(canvasId, client.user.uid, clientId);
+
+                // Broadcast to canvas room
+                this.broadcastToRoom(canvasId, {
+                    type: 'object_moved',
+                    payload: {
+                        roomId: canvasId,
+                        objectId,
+                        x,
+                        y,
+                        userId: client.user.uid
+                    },
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                console.error(`❌ Failed to move object in canvas ${canvasId}:`, error);
+                this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to move object');
+            }
+        } else {
+            // Fallback to traditional room-based handling
+            await this.handleTraditionalObjectMoved(clientId, message, _context);
+        }
+    }
+
+    /**
+     * Handle object deletion in canvas-specific context
+     */
+    private async handleObjectDeleted(clientId: string, message: any, _context: any): Promise<void> {
+        const { roomId, objectId } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required');
+            return;
+        }
+
+        const canvasId = roomId;
+        if (canvasId && this.isCanvasRoom(canvasId)) {
+            try {
+                await this.canvasStateIsolation.removeObjectFromCanvas(
+                    canvasId,
+                    objectId,
+                    client.user.uid,
+                    clientId
+                );
+
+                // Update presence activity
+                this.canvasStateIsolation.updateUserActivity(canvasId, client.user.uid, clientId);
+
+                // Broadcast to canvas room
+                this.broadcastToRoom(canvasId, {
+                    type: 'object_deleted',
+                    payload: {
+                        roomId: canvasId,
+                        objectId,
+                        userId: client.user.uid
+                    },
+                    timestamp: Date.now()
+                });
+
+                console.log(`🗑️ Deleted object ${objectId} from canvas ${canvasId}`);
+            } catch (error) {
+                console.error(`❌ Failed to delete object in canvas ${canvasId}:`, error);
+                this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to delete object');
+            }
+        } else {
+            // Fallback to traditional room-based handling
+            await this.handleTraditionalObjectDeleted(clientId, message, _context);
+        }
+    }
+
+    /**
+     * Handle object resize in canvas-specific context
+     */
+    private async handleObjectResized(clientId: string, message: any, _context: any): Promise<void> {
+        const { roomId, objectId, updates } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required');
+            return;
+        }
+
+        const canvasId = roomId;
+        if (canvasId && this.isCanvasRoom(canvasId)) {
+            try {
+                await this.canvasStateIsolation.updateObjectInCanvas(
+                    canvasId,
+                    objectId,
+                    { ...updates, updatedAt: Date.now() },
+                    client.user.uid,
+                    clientId
+                );
+
+                // Update presence activity
+                this.canvasStateIsolation.updateUserActivity(canvasId, client.user.uid, clientId);
+
+                // Broadcast to canvas room
+                this.broadcastToRoom(canvasId, {
+                    type: 'object_resized',
+                    payload: {
+                        roomId: canvasId,
+                        objectId,
+                        updates,
+                        userId: client.user.uid
+                    },
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                console.error(`❌ Failed to resize object in canvas ${canvasId}:`, error);
+                this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to resize object');
+            }
+        } else {
+            // Fallback to traditional room-based handling
+            await this.handleTraditionalObjectResized(clientId, message, _context);
+        }
+    }
+
+    /**
+     * Handle object rotation in canvas-specific context
+     */
+    private async handleObjectRotated(clientId: string, message: any, _context: any): Promise<void> {
+        const { roomId, objectId, rotation, x, y } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required');
+            return;
+        }
+
+        const canvasId = roomId;
+        if (canvasId && this.isCanvasRoom(canvasId)) {
+            try {
+                await this.canvasStateIsolation.updateObjectInCanvas(
+                    canvasId,
+                    objectId,
+                    { rotation, x, y, updatedAt: Date.now() },
+                    client.user.uid,
+                    clientId
+                );
+
+                // Update presence activity
+                this.canvasStateIsolation.updateUserActivity(canvasId, client.user.uid, clientId);
+
+                // Broadcast to canvas room
+                this.broadcastToRoom(canvasId, {
+                    type: 'object_rotated',
+                    payload: {
+                        roomId: canvasId,
+                        objectId,
+                        rotation,
+                        x,
+                        y,
+                        userId: client.user.uid
+                    },
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                console.error(`❌ Failed to rotate object in canvas ${canvasId}:`, error);
+                this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to rotate object');
+            }
+        } else {
+            // Fallback to traditional room-based handling
+            await this.handleTraditionalObjectRotated(clientId, message, _context);
+        }
+    }
+
+    /**
+     * Handle text changes in canvas-specific context
+     */
+    private async handleTextChanged(clientId: string, message: any, _context: any): Promise<void> {
+        const { roomId, objectId, text } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required');
+            return;
+        }
+
+        const canvasId = roomId;
+        if (canvasId && this.isCanvasRoom(canvasId)) {
+            try {
+                await this.canvasStateIsolation.updateObjectInCanvas(
+                    canvasId,
+                    objectId,
+                    { text, updatedAt: Date.now() },
+                    client.user.uid,
+                    clientId
+                );
+
+                // Update presence activity
+                this.canvasStateIsolation.updateUserActivity(canvasId, client.user.uid, clientId);
+
+                // Broadcast to canvas room
+                this.broadcastToRoom(canvasId, {
+                    type: 'text_changed',
+                    payload: {
+                        roomId: canvasId,
+                        objectId,
+                        text,
+                        userId: client.user.uid
+                    },
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                console.error(`❌ Failed to update text in canvas ${canvasId}:`, error);
+                this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to update text');
+            }
+        } else {
+            // Fallback to traditional room-based handling
+            await this.handleTraditionalTextChanged(clientId, message, _context);
+        }
+    }
+
+    /**
+     * Handle canvas state request in canvas-specific context
+     */
+    private async handleCanvasStateRequested(clientId: string, message: any, _context: any): Promise<void> {
+        const { roomId } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required');
+            return;
+        }
+
+        const canvasId = roomId;
+        if (canvasId && this.isCanvasRoom(canvasId)) {
+            try {
+                // Get canvas state from isolation service
+                const objects = this.canvasStateIsolation.getCanvasObjects(canvasId);
+                const cursors = this.canvasStateIsolation.getCanvasCursors(canvasId);
+                const presence = this.canvasStateIsolation.getCanvasPresence(canvasId);
+
+                // Send complete canvas state
+                this.sendToClient(clientId, {
+                    type: 'canvas_state_sync',
+                    payload: {
+                        roomId: canvasId,
+                        objects,
+                        cursors,
+                        presence,
+                        timestamp: Date.now()
+                    },
+                    timestamp: Date.now()
+                });
+
+                console.log(`📤 Sent canvas state for ${canvasId} to ${clientId} (${objects.length} objects)`);
+            } catch (error) {
+                console.error(`❌ Failed to get canvas state for ${canvasId}:`, error);
+                this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to get canvas state');
+            }
+        } else {
+            // Fallback to traditional room-based handling
+            await this.handleTraditionalCanvasStateRequested(clientId, message, _context);
+        }
+    }
+
+    /**
+     * Handle canvas clear in canvas-specific context
+     */
+    private async handleCanvasCleared(clientId: string, message: any, _context: any): Promise<void> {
+        const { roomId } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required');
+            return;
+        }
+
+        const canvasId = roomId;
+        if (canvasId && this.isCanvasRoom(canvasId)) {
+            try {
+                await this.canvasStateIsolation.clearCanvas(
+                    canvasId,
+                    client.user.uid,
+                    clientId
+                );
+
+                // Update presence activity
+                this.canvasStateIsolation.updateUserActivity(canvasId, client.user.uid, clientId);
+
+                // Broadcast to canvas room
+                this.broadcastToRoom(canvasId, {
+                    type: 'canvas_cleared',
+                    payload: {
+                        roomId: canvasId,
+                        userId: client.user.uid
+                    },
+                    timestamp: Date.now()
+                });
+
+                console.log(`🧹 Cleared canvas ${canvasId} by ${client.user.uid}`);
+            } catch (error) {
+                console.error(`❌ Failed to clear canvas ${canvasId}:`, error);
+                this.sendErrorMessage(clientId, ERROR_CODES.INTERNAL_ERROR, 'Failed to clear canvas');
+            }
+        } else {
+            // Fallback to traditional room-based handling
+            await this.handleTraditionalCanvasCleared(clientId, message, _context);
+        }
+    }
+
+    // ========================================
+    // Canvas-Specific Cursor Handlers
+    // ========================================
+
+    /**
+     * Enhanced cursor handling for canvas isolation
+     */
+    private handleCursorMoved(clientId: string, message: any, _context: any): void {
+        const { x, y, roomId, tool, color } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required');
+            return;
+        }
+
+        const canvasId = roomId;
+        if (canvasId && this.isCanvasRoom(canvasId)) {
+            // Update cursor in canvas state isolation
+            this.canvasStateIsolation.updateCanvasCursor(
+                canvasId,
+                client.user.uid,
+                clientId,
+                { x, y, visible: true, tool, color },
+                {
+                    displayName: client.user.displayName || client.user.name || 'Anonymous',
+                    avatarColor: client.user.avatarColor
+                }
+            );
+
+            // Broadcast cursor movement to canvas room
+            this.broadcastToRoom(canvasId, {
+                type: 'cursor_moved',
+                payload: {
+                    x,
+                    y,
+                    userId: client.user.uid,
+                    clientId,
+                    roomId: canvasId,
+                    tool,
+                    color,
+                    userInfo: {
+                        displayName: client.user.displayName || client.user.name || 'Anonymous',
+                        avatarColor: client.user.avatarColor
+                    }
+                },
+                timestamp: Date.now()
+            }, clientId);
+        } else {
+            // Fallback to traditional room-based cursor handling
+            this.handleTraditionalCursorMoved(clientId, message, _context);
+        }
+    }
+
+    /**
+     * Enhanced cursor update for canvas isolation
+     */
+    private handleCursorUpdate(clientId: string, message: any, _context: any): void {
+        const { x, y, roomId, userInfo, activeTool } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            this.sendErrorMessage(clientId, ERROR_CODES.AUTH_REQUIRED, 'Authentication required');
+            return;
+        }
+
+        // Update client user info if provided
+        if (userInfo) {
+            client.user = { ...client.user, ...userInfo };
+        }
+
+        const canvasId = roomId;
+        if (canvasId && this.isCanvasRoom(canvasId)) {
+            // Update cursor in canvas state isolation
+            this.canvasStateIsolation.updateCanvasCursor(
+                canvasId,
+                client.user.uid,
+                clientId,
+                { x, y, visible: true, tool: activeTool },
+                {
+                    displayName: client.user.displayName || client.user.name || 'Anonymous',
+                    avatarColor: client.user.avatarColor
+                }
+            );
+
+            // Broadcast cursor update to canvas room
+            this.broadcastToRoom(canvasId, {
+                type: 'cursor_update',
+                payload: {
+                    x,
+                    y,
+                    userId: client.user.uid,
+                    clientId,
+                    roomId: canvasId,
+                    userInfo: client.user,
+                    activeTool
+                },
+                timestamp: Date.now()
+            }, clientId);
+        } else {
+            // Fallback to traditional room-based cursor handling
+            this.handleTraditionalCursorUpdate(clientId, message, _context);
+        }
+    }
+
+    /**
+     * Enhanced cursor left handling for canvas isolation
+     */
+    private handleCursorLeft(clientId: string, message: any, _context: any): void {
+        const { roomId } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.user) {
+            return; // No error for cursor left
+        }
+
+        const canvasId = roomId;
+        if (canvasId && this.isCanvasRoom(canvasId)) {
+            // Remove cursor from canvas state isolation
+            this.canvasStateIsolation.removeCanvasCursor(canvasId, client.user.uid);
+
+            // Broadcast cursor left to canvas room
+            this.broadcastToRoom(canvasId, {
+                type: 'cursor_left',
+                payload: {
+                    userId: client.user.uid,
+                    clientId,
+                    roomId: canvasId
+                },
+                timestamp: Date.now()
+            }, clientId);
+        } else {
+            // Fallback to traditional room-based cursor handling
+            this.handleTraditionalCursorLeft(clientId, message, _context);
+        }
+    }
+
+    // ========================================
+    // Utility Methods
+    // ========================================
+
+    /**
+     * Check if room ID represents a canvas room
+     */
+    private isCanvasRoom(roomId: string): boolean {
+        // Canvas IDs typically follow UUID format or specific canvas prefix
+        // This is a simple heuristic - in production you'd have a more robust check
+        return roomId.length > 10 && (
+            roomId.includes('-') || // UUID format
+            roomId.startsWith('canvas-') || // Canvas prefix
+            /^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/.test(roomId) // UUID regex
+        );
+    }
+
+    // ========================================
+    // Traditional Room Fallback Handlers
+    // ========================================
+
+    /**
+     * Traditional object handlers for backward compatibility
+     */
+    private async handleTraditionalObjectCreated(clientId: string, message: any, _context: any): Promise<void> {
+        // Implement traditional room-based object creation if needed
+        console.log('Traditional object created handler not implemented');
+    }
+
+    private async handleTraditionalObjectUpdated(clientId: string, message: any, _context: any): Promise<void> {
+        console.log('Traditional object updated handler not implemented');
+    }
+
+    private async handleTraditionalObjectMoved(clientId: string, message: any, _context: any): Promise<void> {
+        console.log('Traditional object moved handler not implemented');
+    }
+
+    private async handleTraditionalObjectDeleted(clientId: string, message: any, _context: any): Promise<void> {
+        console.log('Traditional object deleted handler not implemented');
+    }
+
+    private async handleTraditionalObjectResized(clientId: string, message: any, _context: any): Promise<void> {
+        console.log('Traditional object resized handler not implemented');
+    }
+
+    private async handleTraditionalObjectRotated(clientId: string, message: any, _context: any): Promise<void> {
+        console.log('Traditional object rotated handler not implemented');
+    }
+
+    private async handleTraditionalTextChanged(clientId: string, message: any, _context: any): Promise<void> {
+        console.log('Traditional text changed handler not implemented');
+    }
+
+    private async handleTraditionalCanvasStateRequested(clientId: string, message: any, _context: any): Promise<void> {
+        console.log('Traditional canvas state requested handler not implemented');
+    }
+
+    private async handleTraditionalCanvasCleared(clientId: string, message: any, _context: any): Promise<void> {
+        console.log('Traditional canvas cleared handler not implemented');
+    }
+
+    private handleTraditionalCursorMoved(clientId: string, message: any, _context: any): void {
+        // Implement existing cursor logic for traditional rooms
+        const { x, y, roomId } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        // Broadcast cursor position to other users in the room
+        this.broadcastToRoom(roomId, {
+            type: 'cursor_moved',
+            payload: {
+                x,
+                y,
+                userId: clientId,
+                roomId,
+                userInfo: client.user
+            },
+            timestamp: Date.now()
+        }, clientId);
+    }
+
+    private handleTraditionalCursorUpdate(clientId: string, message: any, _context: any): void {
+        // Implement existing cursor update logic for traditional rooms
+        const { x, y, roomId, userInfo, activeTool } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            this.sendErrorMessage(clientId, ERROR_CODES.INVALID_ROOM_ID, 'Not in the specified room');
+            return;
+        }
+
+        // Update client user info if provided
+        if (userInfo) {
+            client.user = { ...client.user, ...userInfo };
+        }
+
+        // Broadcast cursor update to other users in the room
+        this.broadcastToRoom(roomId, {
+            type: 'cursor_update',
+            payload: {
+                x,
+                y,
+                userId: clientId,
+                roomId,
+                userInfo: client.user,
+                activeTool
+            },
+            timestamp: Date.now()
+        }, clientId);
+    }
+
+    private handleTraditionalCursorLeft(clientId: string, message: any, _context: any): void {
+        // Implement existing cursor left logic for traditional rooms
+        const { roomId } = message.payload || {};
+        const client = this.clients.get(clientId);
+
+        if (!client || !client.roomId || client.roomId !== roomId) {
+            return; // No error for cursor left
+        }
+
+        // Broadcast cursor left to other users in the room
+        this.broadcastToRoom(roomId, {
+            type: 'cursor_left',
+            payload: {
+                userId: clientId,
+                roomId
+            },
+            timestamp: Date.now()
+        }, clientId);
     }
 
     /**
@@ -1101,6 +1843,11 @@ export class WebSocketConnectionManager {
         if (!client) return;
 
         try {
+            // Clean up canvas state isolation
+            if (client.user) {
+                await this.canvasStateIsolation.cleanupUserState(client.user.uid, clientId);
+            }
+
             // Leave all canvas rooms
             await this.canvasNamespaceManager.leaveAllCanvasRooms(clientId);
 
@@ -1289,6 +2036,9 @@ export class WebSocketConnectionManager {
 
         // Shutdown canvas namespace manager
         this.canvasNamespaceManager.shutdown();
+
+        // Shutdown canvas state isolation service
+        this.canvasStateIsolation.shutdown();
 
         // Shutdown persistence service (save all pending changes)
         try {

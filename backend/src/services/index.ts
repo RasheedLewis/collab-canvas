@@ -11,6 +11,7 @@ export { AuditLogService } from './auditLogService';
 
 // Canvas Management Services
 export { canvasStateService, CanvasStateService } from './canvasStateService';
+export { CanvasStateIsolationService } from './canvasStateIsolationService';
 export { CanvasDiscoveryService } from './canvasDiscoveryService';
 export { ThumbnailService } from './thumbnailService';
 export { CanvasTrackingService } from './canvasTrackingService';
