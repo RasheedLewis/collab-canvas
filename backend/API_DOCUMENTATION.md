@@ -305,6 +305,333 @@ GET /api/canvas/search/public
 
 ---
 
+## Canvas Discovery and Search
+
+### Discover Public Canvases
+
+Discover public canvases with advanced filtering and categorization.
+
+```http
+GET /api/discover/canvases
+```
+
+**Query Parameters:**
+- `q` (string) - Search term for name, description, tags
+- `tags` (string) - Comma-separated tags to filter by
+- `category` (string) - Discovery category: featured, trending, recent, popular
+- `collaboratorName` (string) - Filter by collaborator name
+- `excludeUserId` (string) - Exclude canvases from specific user
+- `minCollaborators` (number) - Minimum number of collaborators
+- `maxCollaborators` (number) - Maximum number of collaborators
+- `createdAfter` (number) - Only canvases created after timestamp
+- `createdBefore` (number) - Only canvases created before timestamp
+- `limit` (number, max: 50, default: 20) - Number of results
+- `cursor` (string) - Pagination cursor
+
+**Response:**
+```json
+{
+  "success": true,
+  "canvases": [ ... ],
+  "hasMore": true,
+  "nextCursor": "cursor-string"
+}
+```
+
+### Get Personalized Recommendations
+
+Get canvas recommendations based on user activity and preferences.
+
+```http
+GET /api/discover/recommendations
+```
+
+**Requires:** Authentication
+
+**Query Parameters:**
+- `limit` (number, default: 10) - Number of recommendations
+
+**Response:**
+```json
+{
+  "success": true,
+  "recommendations": [
+    {
+      "canvas": { ... },
+      "score": 85,
+      "reason": "similar_tags",
+      "metadata": {
+        "commonTags": ["design", "ui"],
+        "activityScore": 0.8
+      }
+    }
+  ]
+}
+```
+
+### Get Popular Tags
+
+Get popular tags for browse interface.
+
+```http
+GET /api/discover/tags
+```
+
+**Query Parameters:**
+- `limit` (number, default: 20) - Number of tags
+
+**Response:**
+```json
+{
+  "success": true,
+  "tags": [
+    {
+      "tag": "design",
+      "count": 42
+    },
+    {
+      "tag": "wireframe", 
+      "count": 28
+    }
+  ]
+}
+```
+
+### Generate Canvas Thumbnail
+
+Generate or regenerate a thumbnail for a canvas.
+
+```http
+POST /api/discover/thumbnails/{canvasId}/generate
+```
+
+**Requires:** View permission
+
+**Query Parameters:**
+- `width` (number, default: 400) - Thumbnail width
+- `height` (number, default: 300) - Thumbnail height
+- `backgroundColor` (string, default: '#ffffff') - Background color
+- `quality` (number, 0-1, default: 0.8) - JPEG quality
+- `format` (string, default: 'jpeg') - Image format: png, jpeg
+
+**Response:**
+```json
+{
+  "success": true,
+  "thumbnailUrl": "/api/thumbnails/canvas-id/thumbnail.jpeg",
+  "previewUrl": "/api/thumbnails/canvas-id/preview.jpeg"
+}
+```
+
+### Update Canvas Thumbnail
+
+Regenerate thumbnail when canvas changes.
+
+```http
+PUT /api/discover/thumbnails/{canvasId}/update
+```
+
+**Requires:** Edit permission
+
+**Response:**
+```json
+{
+  "success": true,
+  "thumbnailUrl": "/api/thumbnails/canvas-id/thumbnail.jpeg",
+  "previewUrl": "/api/thumbnails/canvas-id/preview.jpeg",
+  "message": "Thumbnail updated successfully"
+}
+```
+
+### Serve Canvas Thumbnail
+
+Get the actual thumbnail image file.
+
+```http
+GET /api/thumbnails/{canvasId}/{type}/{filename}
+```
+
+**Parameters:**
+- `canvasId` (string) - Canvas ID
+- `type` (string) - thumbnail or preview
+- `filename` (string) - e.g., thumbnail.jpeg
+
+**Response:** Image file with appropriate content-type headers
+
+### Batch Generate Thumbnails
+
+Generate thumbnails for multiple canvases.
+
+```http
+POST /api/discover/thumbnails/batch
+```
+
+**Requires:** Authentication
+
+**Request Body:**
+```json
+{
+  "canvasIds": ["canvas-1", "canvas-2", "canvas-3"]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "results": [
+    {
+      "canvasId": "canvas-1",
+      "result": {
+        "success": true,
+        "thumbnailUrl": "/api/thumbnails/canvas-1/thumbnail.jpeg"
+      }
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "successful": 2,
+    "failed": 1
+  }
+}
+```
+
+### Track Canvas Access
+
+Track user access to canvases for analytics.
+
+```http
+POST /api/discover/track/{canvasId}
+```
+
+**Requires:** View permission
+
+**Request Body:**
+```json
+{
+  "accessType": "view"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Access tracked successfully"
+}
+```
+
+### Get Canvas Analytics
+
+Get analytics and usage statistics for a canvas.
+
+```http
+GET /api/discover/analytics/{canvasId}
+```
+
+**Requires:** View permission
+
+**Query Parameters:**
+- `period` (string, default: '7d') - Analytics period
+
+**Response:**
+```json
+{
+  "success": true,
+  "analytics": {
+    "canvas": {
+      "id": "canvas-id",
+      "name": "My Canvas",
+      "privacy": "public",
+      "createdAt": 1640995200000,
+      "lastAccessedAt": 1640995200000
+    },
+    "content": {
+      "totalObjects": 25,
+      "objectTypes": {
+        "rectangle": 10,
+        "circle": 8,
+        "text": 7
+      },
+      "lastObjectCreated": 1640995200000
+    },
+    "collaboration": {
+      "totalCollaborators": 3,
+      "roles": {
+        "owner": 1,
+        "editor": 2,
+        "viewer": 0
+      }
+    },
+    "activity": {
+      "viewCount": 42,
+      "editCount": 18,
+      "shareCount": 3
+    }
+  },
+  "period": "7d"
+}
+```
+
+### Get Search Suggestions
+
+Get search term suggestions for autocomplete.
+
+```http
+GET /api/discover/search/suggestions
+```
+
+**Query Parameters:**
+- `q` (string) - Partial search term (min 2 chars)
+- `limit` (number, default: 10) - Number of suggestions
+
+**Response:**
+```json
+{
+  "success": true,
+  "suggestions": [
+    {
+      "text": "design system",
+      "type": "tag",
+      "popularity": 85
+    }
+  ]
+}
+```
+
+### Get Discovery Categories
+
+Get available discovery categories with metadata.
+
+```http
+GET /api/discover/categories
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "categories": [
+    {
+      "id": "featured",
+      "name": "Featured",
+      "description": "Hand-picked high-quality canvases",
+      "count": 25,
+      "icon": "⭐"
+    },
+    {
+      "id": "trending",
+      "name": "Trending", 
+      "description": "Popular canvases with recent activity",
+      "count": 42,
+      "icon": "🔥"
+    }
+  ]
+}
+```
+
+---
+
 ## Canvas Objects
 
 ### Get Canvas Objects

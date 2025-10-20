@@ -7,6 +7,7 @@ import { WebSocketConnectionManager } from './websocket/connectionHandler';
 import { aiRoutes } from './routes/aiRoutes';
 import { canvasRoutes } from './routes/canvasRoutes';
 import { canvasObjectRoutes } from './routes/canvasObjectRoutes';
+import { canvasDiscoveryRoutes } from './routes/canvasDiscoveryRoutes';
 import { ToolRegistry } from './tools/toolRegistry';
 import { CanvasPersistenceService } from './services/persistenceService';
 import { initializeCanvasToolServices, CANVAS_TOOL_HANDLERS } from './tools/canvasToolHandlers';
@@ -137,6 +138,9 @@ app.use('/api/canvas', canvasRoutes);
 
 // Canvas object routes (nested under canvas routes)
 app.use('/api/canvas', canvasObjectRoutes);
+
+// Canvas discovery routes
+app.use('/api/discover', canvasDiscoveryRoutes);
 
 // Additional WebSocket status routes
 app.get('/api/websocket/status', (_req, res) => {
